@@ -29,6 +29,7 @@ export type Routine = {
 export type InboxItem = {
   id: string;
   text: string;
+  createdAt: string;
 };
 
 export type TrackingEntry = {

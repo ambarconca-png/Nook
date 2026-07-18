@@ -66,7 +66,11 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
       .where(and(eq(tasks.userId, userId), eq(tasks.dueDate, today)))
       .orderBy(asc(tasks.createdAt)),
     db
-      .select({ id: inboxItems.id, text: inboxItems.content })
+      .select({
+        id: inboxItems.id,
+        text: inboxItems.content,
+        createdAt: inboxItems.createdAt,
+      })
       .from(inboxItems)
       .where(
         and(eq(inboxItems.userId, userId), eq(inboxItems.status, "inbox")),
@@ -104,6 +108,9 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
       done: Boolean(task.completedAt),
     })),
     routines: routineRows,
-    inboxItems: inboxRows,
+    inboxItems: inboxRows.map((item) => ({
+      ...item,
+      createdAt: item.createdAt.toISOString(),
+    })),
   };
 }

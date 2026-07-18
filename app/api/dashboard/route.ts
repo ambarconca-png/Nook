@@ -71,8 +71,163 @@ export async function POST(request: Request) {
       const [item] = await db
         .insert(inboxItems)
         .values({ userId: user.id, content: text })
+        .returning({
+          id: inboxItems.id,
+          text: inboxItems.content,
+          createdAt: inboxItems.createdAt,
+        });
+      return NextResponse.json({
+        item: { ...item, createdAt: item.createdAt.toISOString() },
+      });
+    }
+
+    if (action === "update-inbox") {
+      const id = cleanText(body.id, 50);
+      const text = cleanText(body.text, 1000);
+      if (!text) {
+        return NextResponse.json(
+          { error: "Ein leerer Gedanke kann gelöscht werden." },
+          { status: 400 },
+        );
+      }
+
+      const [item] = await db
+        .update(inboxItems)
+        .set({ content: text })
+        .where(
+          and(
+            eq(inboxItems.id, id),
+            eq(inboxItems.userId, user.id),
+            eq(inboxItems.status, "inbox"),
+          ),
+        )
         .returning({ id: inboxItems.id, text: inboxItems.content });
+
+      if (!item) {
+        return NextResponse.json(
+          { error: "Inbox-Eintrag nicht gefunden." },
+          { status: 404 },
+        );
+      }
       return NextResponse.json({ item });
+    }
+
+    if (action === "delete-inbox") {
+      const id = cleanText(body.id, 50);
+      const [item] = await db
+        .delete(inboxItems)
+        .where(
+          and(eq(inboxItems.id, id), eq(inboxItems.userId, user.id)),
+        )
+        .returning({ id: inboxItems.id });
+
+      if (!item) {
+        return NextResponse.json(
+          { error: "Inbox-Eintrag nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ id });
+    }
+
+    if (action === "organize-inbox") {
+      const id = cleanText(body.id, 50);
+      const destination = cleanText(body.destination, 20);
+      if (destination !== "todo" && destination !== "routine") {
+        return NextResponse.json(
+          { error: "Dieses Ziel ist noch nicht verfügbar." },
+          { status: 400 },
+        );
+      }
+
+      const result = await db.transaction(async (tx) => {
+        const [item] = await tx
+          .select({ id: inboxItems.id, text: inboxItems.content })
+          .from(inboxItems)
+          .where(
+            and(
+              eq(inboxItems.id, id),
+              eq(inboxItems.userId, user.id),
+              eq(inboxItems.status, "inbox"),
+            ),
+          )
+          .limit(1);
+
+        if (!item) return null;
+
+        if (destination === "todo") {
+          let [area] = await tx
+            .select({ id: areas.id, name: areas.name })
+            .from(areas)
+            .where(and(eq(areas.userId, user.id), eq(areas.name, "Alltag")))
+            .limit(1);
+
+          if (!area) {
+            [area] = await tx
+              .insert(areas)
+              .values({ userId: user.id, name: "Alltag" })
+              .returning({ id: areas.id, name: areas.name });
+          }
+
+          const [task] = await tx
+            .insert(tasks)
+            .values({
+              userId: user.id,
+              areaId: area.id,
+              title: item.text,
+              dueDate: localDate(),
+            })
+            .returning({
+              id: tasks.id,
+              title: tasks.title,
+              areaId: tasks.areaId,
+            });
+
+          await tx
+            .update(inboxItems)
+            .set({ status: "todo" })
+            .where(eq(inboxItems.id, id));
+
+          return {
+            destination,
+            area,
+            task: {
+              id: task.id,
+              title: task.title,
+              areaId: task.areaId ?? "",
+              dueToday: true,
+              done: false,
+            },
+          };
+        }
+
+        const [routine] = await tx
+          .insert(routines)
+          .values({ userId: user.id, title: item.text, weeklyTarget: 3 })
+          .returning({
+            id: routines.id,
+            title: routines.title,
+            target: routines.weeklyTarget,
+          });
+
+        await tx
+          .update(inboxItems)
+          .set({ status: "routine" })
+          .where(eq(inboxItems.id, id));
+
+        return {
+          destination,
+          routine: { ...routine, completed: 0 },
+        };
+      });
+
+      if (!result) {
+        return NextResponse.json(
+          { error: "Inbox-Eintrag nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ id, ...result });
     }
 
     if (action === "create-area") {

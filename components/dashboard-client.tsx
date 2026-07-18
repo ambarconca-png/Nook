@@ -23,8 +23,9 @@ import { SmokeBackground } from "@/components/smoke-background";
 import { NookCard } from "@/components/nook-card";
 import { TaskRow } from "@/components/task-row";
 import { RoutineRow } from "@/components/routine-row";
+import { InboxItemRow } from "@/components/inbox-item-row";
 import type { DashboardData } from "@/lib/dashboard";
-import type { Project, Routine, Task } from "@/lib/types";
+import type { Area, InboxItem, Project, Routine, Task } from "@/lib/types";
 
 type PageId = "today" | "inbox" | "todos" | "routines" | "tracking" | "projects";
 
@@ -132,7 +133,7 @@ export function DashboardClient({
     setCaptureSaving(true);
     setCaptureError("");
     try {
-      const result = await dashboardAction<{ item: { id: string; text: string } }>({
+      const result = await dashboardAction<{ item: InboxItem }>({
         action: "capture",
         text,
       });
@@ -146,6 +147,49 @@ export function DashboardClient({
       );
     } finally {
       setCaptureSaving(false);
+    }
+  }
+
+  async function updateInboxItem(id: string, text: string) {
+    const result = await dashboardAction<{
+      item: { id: string; text: string };
+    }>({ action: "update-inbox", id, text });
+    setInboxItems((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, text: result.item.text } : item,
+      ),
+    );
+  }
+
+  async function deleteInboxItem(id: string) {
+    await dashboardAction({ action: "delete-inbox", id });
+    setInboxItems((current) => current.filter((item) => item.id !== id));
+  }
+
+  async function organizeInboxItem(
+    id: string,
+    destination: "todo" | "routine",
+  ) {
+    const result = await dashboardAction<{
+      task?: Task;
+      routine?: Routine;
+      area?: Area;
+    }>({ action: "organize-inbox", id, destination });
+
+    setInboxItems((current) => current.filter((item) => item.id !== id));
+
+    if (result.task) {
+      setTasks((current) => [...current, result.task as Task]);
+      if (
+        result.area &&
+        !areas.some((area) => area.id === result.area?.id)
+      ) {
+        setAreas((current) => [...current, result.area as Area]);
+      }
+    }
+
+    if (result.routine) {
+      setRoutines((current) => [...current, result.routine as Routine]);
     }
   }
 
@@ -458,28 +502,63 @@ export function DashboardClient({
             buttonLabel="Neu erfassen"
             onButton={() => setCaptureOpen(true)}
           >
-            <NookCard title="Noch nicht einsortiert">
-              <div className="divide-y divide-black/5">
-                {inboxItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between gap-4 py-4"
-                  >
-                    <span>{item.text}</span>
-                    <button
-                      onClick={() =>
-                        setInboxItems((current) =>
-                          current.filter((entry) => entry.id !== item.id),
-                        )
-                      }
-                      className="text-sm text-nook-muted hover:text-nook-ink"
-                    >
-                      Löschen
-                    </button>
+            <div className="grid items-start gap-5 lg:grid-cols-[0.72fr_1.28fr]">
+              <NookCard title="Alles darf erst einmal ankommen">
+                <p className="leading-7 text-nook-muted">
+                  Ein Gedanke muss noch keine Aufgabe sein. Sammle ihn hier und
+                  entscheide später in Ruhe, wo er hingehört.
+                </p>
+                <button
+                  onClick={() => setCaptureOpen(true)}
+                  className="mt-6 flex items-center gap-2 rounded-2xl bg-nook-teal/10 px-4 py-2.5 text-sm text-nook-teal transition hover:bg-nook-teal/15"
+                >
+                  <Plus size={16} />
+                  Etwas festhalten
+                </button>
+              </NookCard>
+
+              <section className="rounded-[24px] border border-white/80 bg-white/72 p-4 shadow-nook backdrop-blur-2xl sm:p-5">
+                <div className="mb-4 flex items-center justify-between px-1">
+                  <div>
+                    <h2 className="text-lg font-semibold tracking-[-0.025em]">
+                      Noch nicht einsortiert
+                    </h2>
+                    <p className="mt-1 text-xs text-nook-muted">
+                      {inboxItems.length === 1
+                        ? "1 Gedanke"
+                        : `${inboxItems.length} Gedanken`}
+                    </p>
                   </div>
-                ))}
-              </div>
-            </NookCard>
+                </div>
+
+                <div className="space-y-3">
+                  {inboxItems.map((item) => (
+                    <InboxItemRow
+                      key={item.id}
+                      item={item}
+                      onUpdate={updateInboxItem}
+                      onDelete={deleteInboxItem}
+                      onOrganize={organizeInboxItem}
+                    />
+                  ))}
+
+                  {inboxItems.length === 0 && (
+                    <div className="rounded-[20px] border border-dashed border-black/10 px-5 py-12 text-center">
+                      <Inbox
+                        size={24}
+                        strokeWidth={1.5}
+                        className="mx-auto text-nook-teal/70"
+                      />
+                      <p className="mt-4 font-medium">Deine Inbox ist ruhig.</p>
+                      <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-nook-muted">
+                        Neue Gedanken erscheinen hier und warten, bis du Zeit
+                        für sie hast.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
           </PageHeading>
         )}
 
