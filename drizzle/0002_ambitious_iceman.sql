@@ -1,0 +1,15 @@
+CREATE TABLE "task_projects" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"user_id" uuid NOT NULL,
+	"area_id" uuid NOT NULL,
+	"title" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "tasks" ADD COLUMN "project_id" uuid;--> statement-breakpoint
+ALTER TABLE "task_projects" ADD CONSTRAINT "task_projects_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_projects" ADD CONSTRAINT "task_projects_area_id_areas_id_fk" FOREIGN KEY ("area_id") REFERENCES "public"."areas"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "task_projects_user_id_idx" ON "task_projects" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "task_projects_area_id_idx" ON "task_projects" USING btree ("area_id");--> statement-breakpoint
+ALTER TABLE "tasks" ADD CONSTRAINT "tasks_project_id_task_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."task_projects"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "tasks_project_id_idx" ON "tasks" USING btree ("project_id");

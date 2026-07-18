@@ -56,6 +56,27 @@ export const areas = pgTable(
   ],
 );
 
+export const taskProjects = pgTable(
+  "task_projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    areaId: uuid("area_id")
+      .notNull()
+      .references(() => areas.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("task_projects_user_id_idx").on(table.userId),
+    index("task_projects_area_id_idx").on(table.areaId),
+  ],
+);
+
 export const tasks = pgTable(
   "tasks",
   {
@@ -64,6 +85,9 @@ export const tasks = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     areaId: uuid("area_id").references(() => areas.id, {
+      onDelete: "set null",
+    }),
+    projectId: uuid("project_id").references(() => taskProjects.id, {
       onDelete: "set null",
     }),
     title: text("title").notNull(),
@@ -76,6 +100,7 @@ export const tasks = pgTable(
   (table) => [
     index("tasks_user_due_date_idx").on(table.userId, table.dueDate),
     index("tasks_area_id_idx").on(table.areaId),
+    index("tasks_project_id_idx").on(table.projectId),
   ],
 );
 

@@ -59,7 +59,7 @@ export function DashboardClient({
   const [captureSaving, setCaptureSaving] = useState(false);
 
   const [areas, setAreas] = useState(initialData.areas);
-  const [projects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState(initialData.projects);
   const [tasks, setTasks] = useState(initialData.tasks);
   const [routines, setRoutines] = useState(initialData.routines);
   const [inboxItems, setInboxItems] = useState(initialData.inboxItems);
@@ -207,7 +207,11 @@ export function DashboardClient({
     }
   }
 
-  async function addTask(areaId: string, projectId?: string) {
+  async function addTask(
+    areaId: string,
+    projectId?: string,
+    dueToday = false,
+  ) {
     const title = window.prompt("Wie heißt die Aufgabe?");
     if (!title?.trim()) return;
     try {
@@ -215,6 +219,8 @@ export function DashboardClient({
         action: "create-task",
         title,
         areaId,
+        projectId,
+        dueToday,
       });
       setTasks((current) => [
         ...current,
@@ -246,11 +252,30 @@ export function DashboardClient({
     }
   }
 
-  function addProject(areaId?: string) {
-    void areaId;
-    window.alert(
-      "Wissensprojekte werden in einem der nächsten Nook-Schritte freigeschaltet.",
-    );
+  async function addProject(areaId?: string) {
+    if (!areaId) {
+      window.alert(
+        "Wissensprojekte werden in einem der nächsten Nook-Schritte freigeschaltet.",
+      );
+      return;
+    }
+
+    const title = window.prompt("Wie heißt das To-do-Projekt?");
+    if (!title?.trim()) return;
+    try {
+      const result = await dashboardAction<{ project: Project }>({
+        action: "create-task-project",
+        areaId,
+        title,
+      });
+      setProjects((current) => [...current, result.project]);
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Projekt konnte nicht gespeichert werden.",
+      );
+    }
   }
 
   async function logout() {
@@ -393,7 +418,9 @@ export function DashboardClient({
                 icon={<ClipboardCheck size={19} />}
                 action={
                   <button
-                    onClick={() => addTask(areas[0]?.id ?? "")}
+                    onClick={() =>
+                      addTask(areas[0]?.id ?? "", undefined, true)
+                    }
                     className="text-sm text-nook-teal"
                   >
                     + Aufgabe
@@ -570,6 +597,23 @@ export function DashboardClient({
             onButton={addArea}
           >
             <div className="grid gap-5">
+              {areas.length === 0 && (
+                <NookCard title="Dein erster Bereich">
+                  <div className="max-w-xl py-6">
+                    <p className="leading-7 text-nook-muted">
+                      Bereiche geben Aufgaben einen ruhigen Platz – zum Beispiel
+                      Alltag, Arbeit oder Zuhause.
+                    </p>
+                    <button
+                      onClick={addArea}
+                      className="mt-5 rounded-2xl bg-nook-teal/10 px-4 py-2.5 text-sm text-nook-teal"
+                    >
+                      + Bereich anlegen
+                    </button>
+                  </div>
+                </NookCard>
+              )}
+
               {areas.map((area) => {
                 const directTasks = tasks.filter(
                   (task) => task.areaId === area.id && !task.projectId,
@@ -584,7 +628,7 @@ export function DashboardClient({
                     title={area.name}
                     subtitle={`${directTasks.filter((task) => !task.done).length} direkte Aufgaben`}
                     action={
-                      <div className="flex gap-3">
+                      <div className="flex flex-wrap justify-end gap-3">
                         <button
                           onClick={() => addTask(area.id)}
                           className="text-sm text-nook-teal"
@@ -613,6 +657,11 @@ export function DashboardClient({
                             onToggle={() => toggleTask(task.id)}
                           />
                         ))}
+                        {directTasks.length === 0 && (
+                          <p className="py-4 text-sm text-nook-muted">
+                            Noch keine direkten Aufgaben.
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -624,8 +673,13 @@ export function DashboardClient({
                         <div className="mb-2 flex items-center justify-between">
                           <div>
                             <h3 className="font-medium">{project.title}</h3>
-                            <p className="mt-1 text-sm text-nook-muted">
-                              {project.note}
+                            <p className="mt-1 text-xs text-nook-muted">
+                              {
+                                tasks.filter(
+                                  (task) => task.projectId === project.id,
+                                ).length
+                              }{" "}
+                              Aufgaben
                             </p>
                           </div>
                           <button
@@ -647,6 +701,13 @@ export function DashboardClient({
                                 onToggle={() => toggleTask(task.id)}
                               />
                             ))}
+                          {tasks.filter(
+                            (task) => task.projectId === project.id,
+                          ).length === 0 && (
+                            <p className="py-4 text-sm text-nook-muted">
+                              Dieses Projekt ist noch ganz offen.
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}

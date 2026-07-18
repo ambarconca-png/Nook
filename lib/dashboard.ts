@@ -7,9 +7,10 @@ import {
   inboxItems,
   routineCompletions,
   routines,
+  taskProjects,
   tasks,
 } from "@/lib/db/schema";
-import type { Area, InboxItem, Routine, Task } from "@/lib/types";
+import type { Area, InboxItem, Project, Routine, Task } from "@/lib/types";
 
 const TIME_ZONE = "Europe/Zurich";
 
@@ -39,6 +40,7 @@ function currentWeekBounds() {
 
 export type DashboardData = {
   areas: Area[];
+  projects: Project[];
   tasks: Task[];
   routines: Routine[];
   inboxItems: InboxItem[];
@@ -49,22 +51,34 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
   const today = localDate();
   const week = currentWeekBounds();
 
-  const [areaRows, taskRows, inboxRows, routineRows] = await Promise.all([
+  const [areaRows, projectRows, taskRows, inboxRows, routineRows] =
+    await Promise.all([
     db
       .select({ id: areas.id, name: areas.name })
       .from(areas)
       .where(eq(areas.userId, userId))
       .orderBy(asc(areas.createdAt)),
-    db
-      .select({
-        id: tasks.id,
-        title: tasks.title,
-        areaId: tasks.areaId,
-        completedAt: tasks.completedAt,
-      })
-      .from(tasks)
-      .where(and(eq(tasks.userId, userId), eq(tasks.dueDate, today)))
-      .orderBy(asc(tasks.createdAt)),
+      db
+        .select({
+          id: taskProjects.id,
+          title: taskProjects.title,
+          areaId: taskProjects.areaId,
+        })
+        .from(taskProjects)
+        .where(eq(taskProjects.userId, userId))
+        .orderBy(asc(taskProjects.createdAt)),
+      db
+        .select({
+          id: tasks.id,
+          title: tasks.title,
+          areaId: tasks.areaId,
+          projectId: tasks.projectId,
+          dueDate: tasks.dueDate,
+          completedAt: tasks.completedAt,
+        })
+        .from(tasks)
+        .where(eq(tasks.userId, userId))
+        .orderBy(asc(tasks.createdAt)),
     db
       .select({
         id: inboxItems.id,
@@ -96,15 +110,17 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
       .where(and(eq(routines.userId, userId), eq(routines.active, true)))
       .groupBy(routines.id)
       .orderBy(asc(routines.createdAt)),
-  ]);
+    ]);
 
   return {
     areas: areaRows,
+    projects: projectRows.map((project) => ({ ...project, note: "" })),
     tasks: taskRows.map((task) => ({
       id: task.id,
       title: task.title,
       areaId: task.areaId ?? "",
-      dueToday: true,
+      projectId: task.projectId ?? undefined,
+      dueToday: task.dueDate === today,
       done: Boolean(task.completedAt),
     })),
     routines: routineRows,

@@ -7,6 +7,7 @@ import {
   inboxItems,
   routineCompletions,
   routines,
+  taskProjects,
   tasks,
 } from "@/lib/db/schema";
 import { localDate } from "@/lib/dashboard";
@@ -257,11 +258,35 @@ export async function POST(request: Request) {
     if (action === "create-task") {
       const title = cleanText(body.title, 240);
       let areaId = cleanText(body.areaId, 50) || null;
+      let projectId = cleanText(body.projectId, 50) || null;
+      const dueToday = body.dueToday === true;
       if (!title) {
         return NextResponse.json(
           { error: "Bitte gib eine Aufgabe ein." },
           { status: 400 },
         );
+      }
+
+      if (projectId) {
+        const [ownedProject] = await db
+          .select({
+            id: taskProjects.id,
+            areaId: taskProjects.areaId,
+          })
+          .from(taskProjects)
+          .where(
+            and(
+              eq(taskProjects.id, projectId),
+              eq(taskProjects.userId, user.id),
+            ),
+          )
+          .limit(1);
+
+        if (ownedProject) {
+          areaId = ownedProject.areaId;
+        } else {
+          projectId = null;
+        }
       }
 
       if (areaId) {
@@ -296,20 +321,61 @@ export async function POST(request: Request) {
         .values({
           userId: user.id,
           areaId,
+          projectId,
           title,
-          dueDate: localDate(),
+          dueDate: dueToday ? localDate() : null,
         })
-        .returning({ id: tasks.id, title: tasks.title, areaId: tasks.areaId });
+        .returning({
+          id: tasks.id,
+          title: tasks.title,
+          areaId: tasks.areaId,
+          projectId: tasks.projectId,
+        });
 
       return NextResponse.json({
         task: {
           id: task.id,
           title: task.title,
           areaId: task.areaId ?? "",
-          dueToday: true,
+          projectId: task.projectId ?? undefined,
+          dueToday,
           done: false,
         },
       });
+    }
+
+    if (action === "create-task-project") {
+      const title = cleanText(body.title, 160);
+      const areaId = cleanText(body.areaId, 50);
+      if (!title || !areaId) {
+        return NextResponse.json(
+          { error: "Projektname und Bereich werden benötigt." },
+          { status: 400 },
+        );
+      }
+
+      const [ownedArea] = await db
+        .select({ id: areas.id })
+        .from(areas)
+        .where(and(eq(areas.id, areaId), eq(areas.userId, user.id)))
+        .limit(1);
+      if (!ownedArea) {
+        return NextResponse.json(
+          { error: "Bereich nicht gefunden." },
+          { status: 404 },
+        );
+      }
+
+      const [project] = await db
+        .insert(taskProjects)
+        .values({ userId: user.id, areaId, title })
+        .returning({
+          id: taskProjects.id,
+          title: taskProjects.title,
+          areaId: taskProjects.areaId,
+        });
+
+      return NextResponse.json({ project: { ...project, note: "" } });
     }
 
     if (action === "toggle-task") {
