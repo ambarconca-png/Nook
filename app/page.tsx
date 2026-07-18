@@ -94,6 +94,12 @@ const initialTracking: TrackingEntry[] = [
   { id: "track-2", type: "Tagesform", note: "Ruhiger Tag" },
 ];
 
+function getGreeting(hour: number) {
+  if (hour < 12) return "Guten Morgen";
+  if (hour < 18) return "Guten Tag";
+  return "Guten Abend";
+}
+
 export default function HomePage() {
   const [page, setPage] = useState<PageId>("today");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -185,11 +191,13 @@ export default function HomePage() {
     ]);
   }
 
+  const now = new Date();
   const greetingDate = new Intl.DateTimeFormat("de-DE", {
     weekday: "long",
     day: "numeric",
     month: "long",
-  }).format(new Date());
+  }).format(now);
+  const greeting = getGreeting(now.getHours());
 
   return (
     <div className="min-h-screen bg-nook-background text-nook-ink">
@@ -271,7 +279,7 @@ export default function HomePage() {
             <section className="mb-8 min-h-40 pt-8 lg:pt-4">
               <p className="mb-2 text-sm text-nook-muted">{greetingDate}</p>
               <h1 className="text-4xl font-semibold tracking-[-0.045em] lg:text-5xl">
-                Guten Morgen.
+                {greeting}, Ambar.
               </h1>
             </section>
 
