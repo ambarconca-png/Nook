@@ -378,6 +378,112 @@ export async function POST(request: Request) {
       return NextResponse.json({ project: { ...project, note: "" } });
     }
 
+    if (action === "update-task") {
+      const id = cleanText(body.id, 50);
+      const title = cleanText(body.title, 240);
+      let areaId = cleanText(body.areaId, 50);
+      let projectId = cleanText(body.projectId, 50) || null;
+      const dueToday = body.dueToday === true;
+
+      if (!title) {
+        return NextResponse.json(
+          { error: "Bitte gib eine Aufgabe ein." },
+          { status: 400 },
+        );
+      }
+
+      const [existingTask] = await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), eq(tasks.userId, user.id)))
+        .limit(1);
+      if (!existingTask) {
+        return NextResponse.json(
+          { error: "Aufgabe nicht gefunden." },
+          { status: 404 },
+        );
+      }
+
+      if (projectId) {
+        const [ownedProject] = await db
+          .select({
+            id: taskProjects.id,
+            areaId: taskProjects.areaId,
+          })
+          .from(taskProjects)
+          .where(
+            and(
+              eq(taskProjects.id, projectId),
+              eq(taskProjects.userId, user.id),
+            ),
+          )
+          .limit(1);
+        if (!ownedProject) {
+          return NextResponse.json(
+            { error: "Projekt nicht gefunden." },
+            { status: 404 },
+          );
+        }
+        areaId = ownedProject.areaId;
+      } else {
+        const [ownedArea] = await db
+          .select({ id: areas.id })
+          .from(areas)
+          .where(and(eq(areas.id, areaId), eq(areas.userId, user.id)))
+          .limit(1);
+        if (!ownedArea) {
+          return NextResponse.json(
+            { error: "Bereich nicht gefunden." },
+            { status: 404 },
+          );
+        }
+      }
+
+      const [task] = await db
+        .update(tasks)
+        .set({
+          title,
+          areaId,
+          projectId,
+          dueDate: dueToday ? localDate() : null,
+        })
+        .where(and(eq(tasks.id, id), eq(tasks.userId, user.id)))
+        .returning({
+          id: tasks.id,
+          title: tasks.title,
+          areaId: tasks.areaId,
+          projectId: tasks.projectId,
+          completedAt: tasks.completedAt,
+        });
+
+      return NextResponse.json({
+        task: {
+          id: task.id,
+          title: task.title,
+          areaId: task.areaId ?? "",
+          projectId: task.projectId ?? undefined,
+          dueToday,
+          done: Boolean(task.completedAt),
+        },
+      });
+    }
+
+    if (action === "delete-task") {
+      const id = cleanText(body.id, 50);
+      const [task] = await db
+        .delete(tasks)
+        .where(and(eq(tasks.id, id), eq(tasks.userId, user.id)))
+        .returning({ id: tasks.id });
+
+      if (!task) {
+        return NextResponse.json(
+          { error: "Aufgabe nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ id: task.id });
+    }
+
     if (action === "toggle-task") {
       const id = cleanText(body.id, 50);
       const done = body.done === true;

@@ -57,6 +57,13 @@ export function DashboardClient({
   const [captureText, setCaptureText] = useState("");
   const [captureError, setCaptureError] = useState("");
   const [captureSaving, setCaptureSaving] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editTaskTitle, setEditTaskTitle] = useState("");
+  const [editTaskAreaId, setEditTaskAreaId] = useState("");
+  const [editTaskProjectId, setEditTaskProjectId] = useState("");
+  const [editTaskDueToday, setEditTaskDueToday] = useState(false);
+  const [editTaskError, setEditTaskError] = useState("");
+  const [editTaskSaving, setEditTaskSaving] = useState(false);
 
   const [areas, setAreas] = useState(initialData.areas);
   const [projects, setProjects] = useState(initialData.projects);
@@ -104,6 +111,71 @@ export function DashboardClient({
         current.map((task) =>
           task.id === id ? { ...task, done: currentTask.done } : task,
         ),
+      );
+    }
+  }
+
+  function openTaskEditor(task: Task) {
+    setEditingTask(task);
+    setEditTaskTitle(task.title);
+    setEditTaskAreaId(task.areaId);
+    setEditTaskProjectId(task.projectId ?? "");
+    setEditTaskDueToday(task.dueToday);
+    setEditTaskError("");
+  }
+
+  async function saveTaskEdit() {
+    if (!editingTask || !editTaskTitle.trim()) {
+      setEditTaskError("Bitte gib eine Aufgabe ein.");
+      return;
+    }
+
+    setEditTaskSaving(true);
+    setEditTaskError("");
+    try {
+      const result = await dashboardAction<{ task: Task }>({
+        action: "update-task",
+        id: editingTask.id,
+        title: editTaskTitle,
+        areaId: editTaskAreaId,
+        projectId: editTaskProjectId || undefined,
+        dueToday: editTaskDueToday,
+      });
+      setTasks((current) =>
+        current.map((task) =>
+          task.id === editingTask.id ? result.task : task,
+        ),
+      );
+      setEditingTask(null);
+    } catch (error) {
+      setEditTaskError(
+        error instanceof Error
+          ? error.message
+          : "Aufgabe konnte nicht gespeichert werden.",
+      );
+    } finally {
+      setEditTaskSaving(false);
+    }
+  }
+
+  async function deleteTask(task: Task) {
+    if (
+      !window.confirm(
+        `Möchtest du „${task.title}“ wirklich löschen?`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await dashboardAction({ action: "delete-task", id: task.id });
+      setTasks((current) => current.filter((item) => item.id !== task.id));
+      if (editingTask?.id === task.id) setEditingTask(null);
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Aufgabe konnte nicht gelöscht werden.",
       );
     }
   }
@@ -437,6 +509,8 @@ export function DashboardClient({
                         (project) => project.id === task.projectId,
                       )}
                       onToggle={() => toggleTask(task.id)}
+                      onEdit={() => openTaskEditor(task)}
+                      onDelete={() => deleteTask(task)}
                     />
                   ))}
                   {todayTasks.length === 0 && (
@@ -655,6 +729,8 @@ export function DashboardClient({
                             task={task}
                             area={area}
                             onToggle={() => toggleTask(task.id)}
+                            onEdit={() => openTaskEditor(task)}
+                            onDelete={() => deleteTask(task)}
                           />
                         ))}
                         {directTasks.length === 0 && (
@@ -699,6 +775,8 @@ export function DashboardClient({
                                 area={area}
                                 project={project}
                                 onToggle={() => toggleTask(task.id)}
+                                onEdit={() => openTaskEditor(task)}
+                                onDelete={() => deleteTask(task)}
                               />
                             ))}
                           {tasks.filter(
@@ -872,6 +950,124 @@ export function DashboardClient({
               >
                 {captureSaving ? "Speichert …" : "Speichern"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingTask && (
+        <div
+          className="fixed inset-0 z-[60] grid place-items-center bg-black/25 p-4 backdrop-blur-md"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setEditingTask(null);
+          }}
+        >
+          <div className="w-full max-w-lg rounded-[28px] bg-nook-card p-6 shadow-nook">
+            <div className="mb-5 flex items-start justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-[-0.03em]">
+                  Aufgabe bearbeiten
+                </h2>
+                <p className="mt-1 text-sm text-nook-muted">
+                  Passe an, was sich verändert hat.
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingTask(null)}
+                className="grid h-9 w-9 place-items-center rounded-full bg-black/5"
+                aria-label="Schließen"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <label className="block text-sm font-medium">
+              Aufgabe
+              <input
+                autoFocus
+                value={editTaskTitle}
+                onChange={(event) => setEditTaskTitle(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") saveTaskEdit();
+                }}
+                className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none transition focus:border-nook-teal focus:ring-4 focus:ring-nook-teal/10"
+              />
+            </label>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium">
+                Bereich
+                <select
+                  value={editTaskAreaId}
+                  onChange={(event) => {
+                    setEditTaskAreaId(event.target.value);
+                    setEditTaskProjectId("");
+                  }}
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+                >
+                  {areas.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block text-sm font-medium">
+                Projekt
+                <select
+                  value={editTaskProjectId}
+                  onChange={(event) => setEditTaskProjectId(event.target.value)}
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+                >
+                  <option value="">Ohne Projekt</option>
+                  {projects
+                    .filter((project) => project.areaId === editTaskAreaId)
+                    .map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.title}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            </div>
+
+            <label className="mt-5 flex cursor-pointer items-center gap-3 rounded-[18px] bg-white/65 px-4 py-3 text-sm">
+              <input
+                type="checkbox"
+                checked={editTaskDueToday}
+                onChange={(event) => setEditTaskDueToday(event.target.checked)}
+                className="h-4 w-4 accent-nook-teal"
+              />
+              Auf „Heute“ anzeigen
+            </label>
+
+            {editTaskError && (
+              <p className="mt-3 text-sm text-rose-700">{editTaskError}</p>
+            )}
+
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+              <button
+                onClick={() => deleteTask(editingTask)}
+                className="rounded-2xl px-3 py-2.5 text-sm text-rose-700 transition hover:bg-rose-50"
+              >
+                Aufgabe löschen
+              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setEditingTask(null)}
+                  className="rounded-2xl bg-black/5 px-4 py-2.5 text-sm"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={saveTaskEdit}
+                  disabled={editTaskSaving}
+                  className="rounded-2xl bg-nook-teal px-4 py-2.5 text-sm text-white disabled:cursor-wait disabled:opacity-60"
+                >
+                  {editTaskSaving ? "Speichert …" : "Speichern"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

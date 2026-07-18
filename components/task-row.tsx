@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check, Pencil, Trash2 } from "lucide-react";
 import type { Area, Project, Task } from "@/lib/types";
 
 export function TaskRow({
@@ -6,11 +6,15 @@ export function TaskRow({
   area,
   project,
   onToggle,
+  onEdit,
+  onDelete,
 }: {
   task: Task;
   area?: Area;
   project?: Project;
   onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   return (
     <div className="flex items-center gap-3 py-3">
@@ -27,7 +31,7 @@ export function TaskRow({
         {task.done && <Check size={13} strokeWidth={2.4} />}
       </button>
 
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p
           className={[
             "text-sm",
@@ -42,6 +46,23 @@ export function TaskRow({
             {project ? ` · ${project.title}` : ""}
           </p>
         )}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1">
+        <button
+          onClick={onEdit}
+          className="grid h-8 w-8 place-items-center rounded-full text-nook-muted transition hover:bg-black/5 hover:text-nook-ink"
+          aria-label={`${task.title} bearbeiten`}
+        >
+          <Pencil size={15} strokeWidth={1.8} />
+        </button>
+        <button
+          onClick={onDelete}
+          className="grid h-8 w-8 place-items-center rounded-full text-nook-muted transition hover:bg-rose-50 hover:text-rose-700"
+          aria-label={`${task.title} löschen`}
+        >
+          <Trash2 size={15} strokeWidth={1.8} />
+        </button>
       </div>
     </div>
   );
