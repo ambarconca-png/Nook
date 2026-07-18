@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.github
+.vscode
+.idea
+.env*
+.DS_Store
+npm-debug.log*
+*.log
+README.md
+AGENTS.md
+CODEX_START_HERE.md
+deploy
+docker-compose*.yml
+supabase
