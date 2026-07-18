@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import {
+  Bell,
   CheckCircle2,
+  ChevronDown,
   ClipboardCheck,
   FolderKanban,
   HeartPulse,
@@ -11,7 +13,9 @@ import {
   Menu,
   Plus,
   Repeat2,
+  Search,
   Settings,
+  Sun,
   X,
 } from "lucide-react";
 import { SmokeBackground } from "@/components/smoke-background";
@@ -203,8 +207,8 @@ export default function HomePage() {
     <div className="min-h-screen bg-nook-background text-nook-ink">
       <SmokeBackground />
 
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-56 border-r border-black/5 bg-white/70 p-5 backdrop-blur-2xl lg:flex lg:flex-col">
-        <div className="px-3 pb-8 pt-2 font-serif text-4xl tracking-[-0.08em]">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-52 border-r border-black/5 bg-white/58 p-4 backdrop-blur-3xl lg:flex lg:flex-col">
+        <div className="px-3 pb-7 pt-2 font-serif text-[32px] tracking-[-0.08em]">
           nook
         </div>
 
@@ -238,6 +242,16 @@ export default function HomePage() {
         <button className="mt-auto flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-nook-ink/70 hover:bg-black/[0.035]">
           <Settings size={19} strokeWidth={1.8} />
           Einstellungen
+        </button>
+        <button className="mt-3 flex items-center gap-3 rounded-2xl border border-black/5 bg-white/55 p-2 text-left text-sm">
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-cyan-200 via-sky-500 to-slate-800 text-xs font-semibold text-white">
+            A
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-medium">Ambar</span>
+            <span className="block text-[11px] text-nook-muted">Mein nook</span>
+          </span>
+          <ChevronDown size={14} className="text-nook-muted" />
         </button>
       </aside>
 
@@ -273,17 +287,28 @@ export default function HomePage() {
         </div>
       )}
 
-      <main className="relative z-10 mx-auto max-w-6xl px-4 pb-28 pt-24 lg:ml-56 lg:px-8 lg:pt-10">
+      <div className="fixed right-7 top-6 z-20 hidden items-center gap-2 lg:flex">
+        {[Search, Bell, Sun].map((Icon, index) => (
+          <button
+            key={index}
+            className="grid h-9 w-9 place-items-center rounded-full border border-white/70 bg-white/60 text-nook-ink/70 shadow-sm backdrop-blur-xl transition hover:bg-white"
+          >
+            <Icon size={17} strokeWidth={1.8} />
+          </button>
+        ))}
+      </div>
+
+      <main className="relative z-10 mx-auto max-w-[1180px] px-4 pb-28 pt-24 lg:ml-52 lg:px-8 lg:pt-9 xl:px-10">
         {page === "today" && (
           <>
-            <section className="mb-8 min-h-40 pt-8 lg:pt-4">
-              <p className="mb-2 text-sm text-nook-muted">{greetingDate}</p>
-              <h1 className="text-4xl font-semibold tracking-[-0.045em] lg:text-5xl">
+            <section className="mb-7 min-h-36 pt-8 lg:pt-5">
+              <h1 className="text-4xl font-semibold tracking-[-0.045em] lg:text-[42px]">
                 {greeting}, Ambar.
               </h1>
+              <p className="mt-2 text-sm text-nook-muted">{greetingDate}</p>
             </section>
 
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               <NookCard
                 title="Heute"
                 subtitle={`${todayTasks.filter((task) => !task.done).length} Aufgaben offen`}
@@ -641,7 +666,7 @@ export default function HomePage() {
         )}
       </main>
 
-      <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-[22px] border border-white/70 bg-white/88 p-2 shadow-nook backdrop-blur-2xl lg:hidden">
+      <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-[22px] border border-white/80 bg-white/82 p-2 shadow-nook backdrop-blur-2xl lg:hidden">
         {navigation
           .filter((item) => item.id !== "inbox")
           .map((item) => {

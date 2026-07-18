@@ -11,17 +11,16 @@
 }
 
 html {
-  background: #f7f3ef;
+  background: #f7f3f0;
 }
 
 body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 18% 0%, rgba(117, 103, 184, 0.12), transparent 25%),
-    radial-gradient(circle at 56% 0%, rgba(214, 123, 149, 0.11), transparent 27%),
-    radial-gradient(circle at 86% 4%, rgba(46, 151, 139, 0.10), transparent 26%),
-    #f7f3ef;
+    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.96), transparent 27%),
+    radial-gradient(circle at 72% 18%, rgba(244, 221, 211, 0.38), transparent 35%),
+    #f7f3f0;
   font-family:
     Inter,
     ui-sans-serif,
@@ -43,8 +42,89 @@ button {
   cursor: pointer;
 }
 
+.smoke {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(34px);
+  opacity: 0.62;
+  mix-blend-mode: multiply;
+  transform-origin: center;
+}
+
+.smoke-slate {
+  top: -10rem;
+  right: 8%;
+  width: 34rem;
+  height: 19rem;
+  transform: rotate(19deg);
+  background: linear-gradient(115deg, transparent 4%, rgba(37, 48, 55, 0.65) 42%, rgba(209, 218, 211, 0.22) 78%);
+}
+
+.smoke-amber {
+  top: 0;
+  right: -8rem;
+  width: 43rem;
+  height: 22rem;
+  transform: rotate(-21deg);
+  background: linear-gradient(120deg, rgba(247, 218, 177, 0.16), rgba(193, 119, 42, 0.62), rgba(242, 191, 128, 0.12));
+}
+
+.smoke-rose {
+  top: 10rem;
+  right: -12rem;
+  width: 40rem;
+  height: 24rem;
+  transform: rotate(-34deg);
+  background: linear-gradient(130deg, rgba(255, 192, 186, 0.15), rgba(205, 70, 86, 0.63), rgba(238, 133, 111, 0.2));
+}
+
+.smoke-violet {
+  top: 2rem;
+  right: 3%;
+  width: 25rem;
+  height: 31rem;
+  transform: rotate(35deg);
+  background: linear-gradient(145deg, rgba(100, 63, 145, 0.56), rgba(183, 135, 208, 0.24), transparent 78%);
+}
+
+.smoke-mint {
+  top: 17rem;
+  right: 21%;
+  width: 29rem;
+  height: 17rem;
+  transform: rotate(18deg);
+  background: linear-gradient(110deg, transparent, rgba(84, 139, 119, 0.38), rgba(198, 219, 201, 0.12));
+}
+
 ::selection {
   background: rgba(46, 151, 139, 0.18);
+}
+
+@media (max-width: 1023px) {
+  .smoke {
+    opacity: 0.48;
+    filter: blur(38px);
+  }
+
+  .smoke-slate,
+  .smoke-mint {
+    display: none;
+  }
+
+  .smoke-amber {
+    top: 0;
+    right: -19rem;
+  }
+
+  .smoke-rose {
+    top: 7rem;
+    right: -21rem;
+  }
+
+  .smoke-violet {
+    top: 1rem;
+    right: -9rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
