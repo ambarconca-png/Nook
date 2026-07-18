@@ -23,7 +23,8 @@ import { SmokeBackground } from "@/components/smoke-background";
 import { NookCard } from "@/components/nook-card";
 import { TaskRow } from "@/components/task-row";
 import { RoutineRow } from "@/components/routine-row";
-import type { Area, InboxItem, Project, Routine, Task, TrackingEntry } from "@/lib/types";
+import type { DashboardData } from "@/lib/dashboard";
+import type { Project, Routine, Task } from "@/lib/types";
 
 type PageId = "today" | "inbox" | "todos" | "routines" | "tracking" | "projects";
 
@@ -36,164 +37,176 @@ const navigation = [
   { id: "projects" as PageId, label: "Projekte", icon: FolderKanban },
 ];
 
-const initialAreas: Area[] = [
-  { id: "arbeit", name: "Arbeit" },
-  { id: "privat", name: "Privat" },
-  { id: "gesundheit", name: "Gesundheit" },
-];
-
-const initialProjects: Project[] = [
-  {
-    id: "website",
-    title: "Website-Relaunch",
-    areaId: "arbeit",
-    note: "Texte, Feedback und offene Fragen für den Relaunch.",
-  },
-];
-
-const initialTasks: Task[] = [
-  {
-    id: "task-1",
-    title: "Präsentation fertigstellen",
-    areaId: "arbeit",
-    projectId: "website",
-    dueToday: true,
-    done: false,
-  },
-  {
-    id: "task-2",
-    title: "Einkauf erledigen",
-    areaId: "privat",
-    dueToday: true,
-    done: false,
-  },
-  {
-    id: "task-3",
-    title: "Arzttermin vereinbaren",
-    areaId: "gesundheit",
-    dueToday: false,
-    done: false,
-  },
-  {
-    id: "task-4",
-    title: "Spesenabrechnung einreichen",
-    areaId: "arbeit",
-    dueToday: false,
-    done: false,
-  },
-];
-
-const initialRoutines: Routine[] = [
-  { id: "routine-1", title: "Sport", target: 3, completed: 2 },
-  { id: "routine-2", title: "Lesen", target: 7, completed: 4 },
-  { id: "routine-3", title: "Pflanzen", target: 1, completed: 0 },
-];
-
-const initialInbox: InboxItem[] = [
-  { id: "inbox-1", text: "Idee für Sommerferien" },
-  { id: "inbox-2", text: "Rezept für Curry suchen" },
-];
-
-const initialTracking: TrackingEntry[] = [
-  { id: "track-1", type: "Zyklus", note: "Zyklustag 18" },
-  { id: "track-2", type: "Tagesform", note: "Ruhiger Tag" },
-];
-
 function getGreeting(hour: number) {
   if (hour < 12) return "Guten Morgen";
   if (hour < 18) return "Guten Tag";
   return "Guten Abend";
 }
 
-export function DashboardClient({ displayName }: { displayName: string }) {
+export function DashboardClient({
+  displayName,
+  initialData,
+}: {
+  displayName: string;
+  initialData: DashboardData;
+}) {
   const [page, setPage] = useState<PageId>("today");
   const [menuOpen, setMenuOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [captureText, setCaptureText] = useState("");
+  const [captureError, setCaptureError] = useState("");
+  const [captureSaving, setCaptureSaving] = useState(false);
 
-  const [areas, setAreas] = useState(initialAreas);
-  const [projects, setProjects] = useState(initialProjects);
-  const [tasks, setTasks] = useState(initialTasks);
-  const [routines, setRoutines] = useState(initialRoutines);
-  const [inboxItems, setInboxItems] = useState(initialInbox);
-  const [trackingEntries, setTrackingEntries] = useState(initialTracking);
+  const [areas, setAreas] = useState(initialData.areas);
+  const [projects] = useState<Project[]>([]);
+  const [tasks, setTasks] = useState(initialData.tasks);
+  const [routines, setRoutines] = useState(initialData.routines);
+  const [inboxItems, setInboxItems] = useState(initialData.inboxItems);
 
   const todayTasks = useMemo(
     () => tasks.filter((task) => task.dueToday),
     [tasks],
   );
 
-  function toggleTask(id: string) {
+  async function dashboardAction<T>(body: Record<string, unknown>) {
+    const response = await fetch("/api/dashboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const result = (await response.json()) as T & { error?: string };
+
+    if (response.status === 401) {
+      window.location.href = "/login";
+      throw new Error("Nicht angemeldet.");
+    }
+    if (!response.ok) {
+      throw new Error(result.error ?? "Änderung konnte nicht gespeichert werden.");
+    }
+    return result;
+  }
+
+  async function toggleTask(id: string) {
+    const currentTask = tasks.find((task) => task.id === id);
+    if (!currentTask) return;
+    const done = !currentTask.done;
+
     setTasks((current) =>
       current.map((task) =>
-        task.id === id ? { ...task, done: !task.done } : task,
+        task.id === id ? { ...task, done } : task,
       ),
     );
+    try {
+      await dashboardAction({ action: "toggle-task", id, done });
+    } catch {
+      setTasks((current) =>
+        current.map((task) =>
+          task.id === id ? { ...task, done: currentTask.done } : task,
+        ),
+      );
+    }
   }
 
-  function incrementRoutine(id: string) {
-    setRoutines((current) =>
-      current.map((routine) =>
-        routine.id === id
-          ? {
-              ...routine,
-              completed: Math.min(routine.target, routine.completed + 1),
-            }
-          : routine,
-      ),
-    );
+  async function incrementRoutine(id: string) {
+    try {
+      const result = await dashboardAction<{ completed: number }>({
+        action: "increment-routine",
+        id,
+      });
+      setRoutines((current) =>
+        current.map((routine) =>
+          routine.id === id
+            ? { ...routine, completed: result.completed }
+            : routine,
+        ),
+      );
+    } catch {
+      // Die bestehende Anzeige bleibt erhalten.
+    }
   }
 
-  function saveCapture() {
+  async function saveCapture() {
     const text = captureText.trim();
     if (!text) return;
 
-    setInboxItems((current) => [
-      { id: crypto.randomUUID(), text },
-      ...current,
-    ]);
-    setCaptureText("");
-    setCaptureOpen(false);
-    setPage("inbox");
+    setCaptureSaving(true);
+    setCaptureError("");
+    try {
+      const result = await dashboardAction<{ item: { id: string; text: string } }>({
+        action: "capture",
+        text,
+      });
+      setInboxItems((current) => [result.item, ...current]);
+      setCaptureText("");
+      setCaptureOpen(false);
+      setPage("inbox");
+    } catch (error) {
+      setCaptureError(
+        error instanceof Error ? error.message : "Eintrag konnte nicht gespeichert werden.",
+      );
+    } finally {
+      setCaptureSaving(false);
+    }
   }
 
-  function addArea() {
+  async function addArea() {
     const name = window.prompt("Wie heißt der neue Bereich?");
     if (!name?.trim()) return;
-    setAreas((current) => [
-      ...current,
-      { id: crypto.randomUUID(), name: name.trim() },
-    ]);
+    try {
+      const result = await dashboardAction<{ area: { id: string; name: string } }>({
+        action: "create-area",
+        name,
+      });
+      setAreas((current) => [...current, result.area]);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Bereich konnte nicht gespeichert werden.");
+    }
   }
 
-  function addTask(areaId: string, projectId?: string) {
+  async function addTask(areaId: string, projectId?: string) {
     const title = window.prompt("Wie heißt die Aufgabe?");
     if (!title?.trim()) return;
-    setTasks((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        title: title.trim(),
+    try {
+      const result = await dashboardAction<{ task: Task }>({
+        action: "create-task",
+        title,
         areaId,
-        projectId,
-        dueToday: false,
-        done: false,
-      },
-    ]);
+      });
+      setTasks((current) => [
+        ...current,
+        { ...result.task, projectId },
+      ]);
+      if (!areas.some((area) => area.id === result.task.areaId)) {
+        setAreas((current) => [
+          ...current,
+          { id: result.task.areaId, name: "Alltag" },
+        ]);
+      }
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Aufgabe konnte nicht gespeichert werden.");
+    }
+  }
+
+  async function addRoutine() {
+    const title = window.prompt("Wie heißt die Routine?");
+    if (!title?.trim()) return;
+    try {
+      const result = await dashboardAction<{ routine: Routine }>({
+        action: "create-routine",
+        title,
+        target: 3,
+      });
+      setRoutines((current) => [...current, result.routine]);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Routine konnte nicht gespeichert werden.");
+    }
   }
 
   function addProject(areaId?: string) {
-    const title = window.prompt("Wie heißt das Projekt?");
-    if (!title?.trim()) return;
-    setProjects((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        title: title.trim(),
-        areaId,
-        note: "Noch keine Notiz.",
-      },
-    ]);
+    void areaId;
+    window.alert(
+      "Wissensprojekte werden in einem der nächsten Nook-Schritte freigeschaltet.",
+    );
   }
 
   async function logout() {
@@ -355,6 +368,12 @@ export function DashboardClient({ displayName }: { displayName: string }) {
                       onToggle={() => toggleTask(task.id)}
                     />
                   ))}
+                  {todayTasks.length === 0 && (
+                    <p className="py-7 text-sm leading-6 text-nook-muted">
+                      Heute ist noch ganz frei. Füge nur hinzu, was wirklich
+                      heute zählt.
+                    </p>
+                  )}
                 </div>
               </NookCard>
 
@@ -362,6 +381,14 @@ export function DashboardClient({ displayName }: { displayName: string }) {
                 title="Routinen"
                 subtitle="Diese Woche"
                 icon={<Repeat2 size={19} />}
+                action={
+                  <button
+                    onClick={addRoutine}
+                    className="text-sm text-nook-teal"
+                  >
+                    + Routine
+                  </button>
+                }
               >
                 <div className="space-y-1">
                   {routines.map((routine) => (
@@ -371,6 +398,14 @@ export function DashboardClient({ displayName }: { displayName: string }) {
                       onIncrement={() => incrementRoutine(routine.id)}
                     />
                   ))}
+                  {routines.length === 0 && (
+                    <button
+                      onClick={addRoutine}
+                      className="w-full py-7 text-left text-sm leading-6 text-nook-muted"
+                    >
+                      Noch keine Routinen. Beginne mit etwas, das dir guttut.
+                    </button>
+                  )}
                 </div>
               </NookCard>
 
@@ -379,20 +414,10 @@ export function DashboardClient({ displayName }: { displayName: string }) {
                 subtitle="Heute erfassen"
                 icon={<HeartPulse size={19} />}
               >
-                <div className="divide-y divide-black/5">
-                  <div className="py-3">
-                    <p className="font-medium">Zyklus · Tag 18</p>
-                    <p className="mt-1 text-sm text-nook-muted">
-                      Nächste Menstruation voraussichtlich in 10–13 Tagen
-                    </p>
-                  </div>
-                  <div className="py-3">
-                    <p className="font-medium">Kopfschmerzen</p>
-                    <p className="mt-1 text-sm text-nook-muted">
-                      Heute noch nicht erfasst
-                    </p>
-                  </div>
-                </div>
+                <p className="py-7 text-sm leading-6 text-nook-muted">
+                  Hier entsteht dein persönliches Tracking – ruhig, privat und
+                  ohne Bewertung.
+                </p>
               </NookCard>
 
               <NookCard
@@ -414,6 +439,12 @@ export function DashboardClient({ displayName }: { displayName: string }) {
                       {item.text}
                     </div>
                   ))}
+                  {inboxItems.length === 0 && (
+                    <p className="py-7 text-sm leading-6 text-nook-muted">
+                      Noch nichts gesammelt. Gedanken dürfen hier erst einmal
+                      einfach ankommen.
+                    </p>
+                  )}
                 </div>
               </NookCard>
             </div>
@@ -552,19 +583,7 @@ export function DashboardClient({ displayName }: { displayName: string }) {
             title="Routinen"
             subtitle="Fortschritt ohne Streak-Druck."
             buttonLabel="Routine"
-            onButton={() => {
-              const title = window.prompt("Wie heißt die Routine?");
-              if (!title?.trim()) return;
-              setRoutines((current) => [
-                ...current,
-                {
-                  id: crypto.randomUUID(),
-                  title: title.trim(),
-                  target: 3,
-                  completed: 0,
-                },
-              ]);
-            }}
+            onButton={addRoutine}
           >
             <div className="grid gap-5 md:grid-cols-2">
               {routines.map((routine) => (
@@ -596,56 +615,21 @@ export function DashboardClient({ displayName }: { displayName: string }) {
             title="Tracking"
             subtitle="Zyklus, Migräne und Tagesform."
             buttonLabel="Eintrag"
-            onButton={() => {
-              const note = window.prompt("Was möchtest du erfassen?");
-              if (!note?.trim()) return;
-              setTrackingEntries((current) => [
-                {
-                  id: crypto.randomUUID(),
-                  type: "Tagesform",
-                  note: note.trim(),
-                },
-                ...current,
-              ]);
-            }}
+            onButton={() =>
+              window.alert(
+                "Persönliches Tracking wird in einem eigenen, sorgfältigen Schritt umgesetzt.",
+              )
+            }
           >
-            <div className="grid gap-5 md:grid-cols-2">
-              <NookCard title="Zyklus" subtitle="Schätzungen klar gekennzeichnet">
-                <div className="space-y-4 text-sm">
-                  <div>
-                    <p className="font-medium">Aktueller Zyklus</p>
-                    <p className="mt-1 text-nook-muted">Tag 18</p>
-                  </div>
-                  <div>
-                    <p className="font-medium">
-                      Voraussichtliche nächste Menstruation
-                    </p>
-                    <p className="mt-1 text-nook-muted">
-                      in 10–13 Tagen · Schätzung
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-medium">Geschätzter Eisprung</p>
-                    <p className="mt-1 text-nook-muted">
-                      ungefähr vor 4 Tagen · Schätzung
-                    </p>
-                  </div>
-                </div>
-              </NookCard>
-
-              <NookCard title="Letzte Einträge">
-                <div className="divide-y divide-black/5">
-                  {trackingEntries.map((entry) => (
-                    <div key={entry.id} className="py-3">
-                      <p className="font-medium">{entry.type}</p>
-                      <p className="mt-1 text-sm text-nook-muted">
-                        {entry.note}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </NookCard>
-            </div>
+            <NookCard title="Dein Tracking entsteht behutsam">
+              <div className="max-w-xl py-6">
+                <p className="leading-7 text-nook-muted">
+                  Zyklus und Kopfschmerzen sind sensible Daten. Deshalb bauen
+                  wir diesen Bereich als eigenen nächsten Schritt – mit klaren
+                  Schätzungen, privaten Notizen und ohne Wertung.
+                </p>
+              </div>
+            </NookCard>
           </PageHeading>
         )}
 
@@ -656,33 +640,12 @@ export function DashboardClient({ displayName }: { displayName: string }) {
             buttonLabel="Projekt"
             onButton={() => addProject()}
           >
-            <div className="grid gap-5 md:grid-cols-2">
-              {projects
-                .filter((project) => !project.areaId)
-                .map((project) => (
-                  <NookCard
-                    key={project.id}
-                    title={project.title}
-                    subtitle="Notizprojekt"
-                  >
-                    <p className="leading-7 text-nook-muted">{project.note}</p>
-                  </NookCard>
-                ))}
-
-              <NookCard title="Ernährungsplan" subtitle="Notizprojekt">
-                <p className="leading-7 text-nook-muted">
-                  Rezepte, Wochenplanung und Einkaufsideen.
-                </p>
-              </NookCard>
-              <NookCard
-                title="Sicherheitskonzept Hausfest"
-                subtitle="Notizprojekt"
-              >
-                <p className="leading-7 text-nook-muted">
-                  Risiken, Zuständigkeiten und Notfallkontakte.
-                </p>
-              </NookCard>
-            </div>
+            <NookCard title="Platz für Wissen, das bleiben darf">
+              <p className="max-w-xl py-6 leading-7 text-nook-muted">
+                Wissensprojekte mit Notizen, Checklisten, Dateien, Bildern und
+                Links folgen als eigener Nook-Baustein.
+              </p>
+            </NookCard>
           </PageHeading>
         )}
       </main>
@@ -751,6 +714,10 @@ export function DashboardClient({ displayName }: { displayName: string }) {
               placeholder="Gedanke, Aufgabe oder Idee …"
             />
 
+            {captureError && (
+              <p className="mt-3 text-sm text-rose-700">{captureError}</p>
+            )}
+
             <div className="mt-4 flex justify-end gap-3">
               <button
                 onClick={() => setCaptureOpen(false)}
@@ -760,9 +727,10 @@ export function DashboardClient({ displayName }: { displayName: string }) {
               </button>
               <button
                 onClick={saveCapture}
-                className="rounded-2xl bg-nook-teal px-4 py-2.5 text-sm text-white"
+                disabled={captureSaving}
+                className="rounded-2xl bg-nook-teal px-4 py-2.5 text-sm text-white disabled:cursor-wait disabled:opacity-60"
               >
-                Speichern
+                {captureSaving ? "Speichert …" : "Speichern"}
               </button>
             </div>
           </div>
