@@ -35,6 +35,9 @@ services:
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
       DATABASE_URL: postgres://${POSTGRES_USER:-nook}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-nook}
+      NOOK_ADMIN_EMAIL: ${NOOK_ADMIN_EMAIL:?NOOK_ADMIN_EMAIL muss in .env gesetzt sein}
+      NOOK_ADMIN_PASSWORD: ${NOOK_ADMIN_PASSWORD:?NOOK_ADMIN_PASSWORD muss in .env gesetzt sein}
+      NOOK_ADMIN_NAME: ${NOOK_ADMIN_NAME:-Ambar}
     depends_on:
       db:
         condition: service_healthy

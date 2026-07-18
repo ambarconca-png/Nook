@@ -62,14 +62,26 @@ jobs:
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          NOOK_ADMIN_EMAIL: ${{ secrets.NOOK_ADMIN_EMAIL }}
+          NOOK_ADMIN_PASSWORD: ${{ secrets.NOOK_ADMIN_PASSWORD }}
+          NOOK_ADMIN_NAME: Ambar
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
+          envs: NOOK_ADMIN_EMAIL,NOOK_ADMIN_PASSWORD,NOOK_ADMIN_NAME
           script: |
             set -euo pipefail
             cd /opt/nook
+            umask 077
+            touch .env
+            grep -vE '^(NOOK_ADMIN_EMAIL|NOOK_ADMIN_PASSWORD|NOOK_ADMIN_NAME)=' .env > .env.next || true
+            printf 'NOOK_ADMIN_EMAIL=%s\n' "$NOOK_ADMIN_EMAIL" >> .env.next
+            printf 'NOOK_ADMIN_PASSWORD=%s\n' "$NOOK_ADMIN_PASSWORD" >> .env.next
+            printf 'NOOK_ADMIN_NAME=%s\n' "$NOOK_ADMIN_NAME" >> .env.next
+            mv .env.next .env
             docker compose pull
             docker compose up -d
             docker image prune -f
