@@ -80,8 +80,25 @@ function newTrackingField(): TrackingField {
     id: `field_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     label: "",
     type: "scale",
+    aggregation: "month",
     options: [],
   };
+}
+
+function formatTrackingValue(field: TrackingField, value: unknown) {
+  if (value === undefined || value === null || value === "") return "";
+  if (field.type === "boolean") return value ? "Ja" : "Nein";
+  if (field.type === "multiselect") {
+    return Array.isArray(value) ? value.join(", ") : "";
+  }
+  if (field.type === "scale") return `${value} von 10`;
+  if (field.type === "duration") {
+    return `${value}${field.unit ? ` ${field.unit}` : " Min."}`;
+  }
+  if (field.type === "number") {
+    return `${value}${field.unit ? ` ${field.unit}` : ""}`;
+  }
+  return String(value);
 }
 
 async function trackingAction<T>(body: Record<string, unknown>) {
@@ -120,6 +137,7 @@ export function TrackingWorkspace({
   const [entryError, setEntryError] = useState("");
 
   const [trackerEditorOpen, setTrackerEditorOpen] = useState(false);
+  const [editingTrackerId, setEditingTrackerId] = useState("");
   const [trackerName, setTrackerName] = useState("");
   const [trackerFields, setTrackerFields] = useState<TrackingField[]>([
     newTrackingField(),
@@ -248,7 +266,10 @@ export function TrackingWorkspace({
     setTrackerError("");
     try {
       const result = await trackingAction<{ tracker: TrackingTracker }>({
-        action: "create-custom-tracker",
+        action: editingTrackerId
+          ? "update-custom-tracker"
+          : "create-custom-tracker",
+        id: editingTrackerId || undefined,
         name: trackerName,
         inputType: trackerFields[0]?.type ?? "text",
         unit: trackerFields[0]?.unit,
@@ -256,9 +277,18 @@ export function TrackingWorkspace({
         fields: trackerFields,
         color: trackerColor,
       });
-      setTrackers((current) => [...current, result.tracker]);
+      setTrackers((current) =>
+        editingTrackerId
+          ? current.map((tracker) =>
+              tracker.id === result.tracker.id ? result.tracker : tracker,
+            )
+          : [...current, result.tracker],
+      );
+      if (activeTracker?.id === result.tracker.id) {
+        setActiveTracker(result.tracker);
+      }
       setTrackerEditorOpen(false);
-      openEntry(result.tracker);
+      if (!editingTrackerId) openEntry(result.tracker);
     } catch (error) {
       setTrackerError(
         error instanceof Error
@@ -317,6 +347,9 @@ export function TrackingWorkspace({
     if (zurichDateKey(entry.startedAt) !== selectedDay) return false;
     return !activeTracker || entry.trackerId === activeTracker.id;
   });
+  const activeTrackerEntries = activeTracker
+    ? entries.filter((entry) => entry.trackerId === activeTracker.id)
+    : [];
 
   return (
     <>
@@ -366,19 +399,30 @@ export function TrackingWorkspace({
             </button>
           </div>
 
-          <TrackingCalendar
-            title={`${activeTracker.name} im Kalender`}
-            subtitle="Wähle einen Tag, um Einträge anzusehen oder nachzutragen."
-            trackers={[activeTracker]}
-            entries={entries.filter(
-              (entry) => entry.trackerId === activeTracker.id,
-            )}
-            onDaySelect={setSelectedDay}
-            embedded
-          />
+          {activeTracker.type === "menstruation" ? (
+            <CycleCalendar
+              trackers={trackers}
+              entries={entries}
+              onDaySelect={setSelectedDay}
+            />
+          ) : (
+            <TrackingCalendar
+              title={`${activeTracker.name} im Kalender`}
+              subtitle="Wähle einen Tag, um Einträge anzusehen oder nachzutragen."
+              trackers={[activeTracker]}
+              entries={activeTrackerEntries}
+              onDaySelect={setSelectedDay}
+              embedded
+            />
+          )}
 
-          {activeTracker.type === "menstruation" && (
-            <CycleCalendar trackers={trackers} entries={entries} />
+          {activeTracker.type === "custom" && (
+            <CustomTrackerOverview
+              tracker={activeTracker}
+              entries={activeTrackerEntries}
+              onEdit={openEntryForEditing}
+              onDelete={deleteEntry}
+            />
           )}
         </section>
       )}
@@ -417,7 +461,7 @@ export function TrackingWorkspace({
         ))}
       </div>
 
-      <section className="mt-5 rounded-[24px] border border-white/80 bg-white/72 p-5 shadow-nook backdrop-blur-2xl sm:p-6">
+      <section className="mt-7">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold tracking-[-0.025em]">
@@ -430,6 +474,7 @@ export function TrackingWorkspace({
           <button
             data-create-tracker="true"
             onClick={() => {
+              setEditingTrackerId("");
               setTrackerName("");
               setTrackerFields([newTrackingField()]);
               setTrackerError("");
@@ -441,45 +486,64 @@ export function TrackingWorkspace({
             Tracker erstellen
           </button>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-5 grid gap-5 md:grid-cols-2">
           {trackers
             .filter((tracker) => tracker.type === "custom")
             .map((tracker) => (
               <div
                 key={tracker.id}
-                className="flex items-center gap-3 rounded-[20px] bg-white/58 p-3"
+                className="group relative rounded-[24px] border border-white/80 bg-white/72 p-6 shadow-nook backdrop-blur-2xl transition duration-500 hover:-translate-y-0.5 hover:bg-white/82"
               >
                 <button
                   onClick={() => setActiveTracker(tracker)}
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  className="block w-full text-left"
                 >
-                  <span
-                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-2xl ${colorClasses[tracker.color]}`}
-                  >
-                    <SlidersHorizontal size={16} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">
-                      {tracker.name}
+                  <div className="flex items-start justify-between pr-10">
+                    <span
+                      className={`grid h-11 w-11 place-items-center rounded-2xl ${colorClasses[tracker.color]}`}
+                    >
+                      <SlidersHorizontal size={20} strokeWidth={1.7} />
                     </span>
-                    <span className="mt-0.5 block text-xs text-nook-muted">
-                      {tracker.fields.length === 1
-                        ? inputLabels[tracker.fields[0].type]
-                        : `${tracker.fields.length} Felder`}
-                    </span>
-                  </span>
+                    <ChevronRight
+                      size={18}
+                      className="text-nook-muted transition group-hover:translate-x-0.5"
+                    />
+                  </div>
+                  <h2 className="mt-6 text-xl font-semibold tracking-[-0.03em]">
+                    {tracker.name}
+                  </h2>
+                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-nook-muted">
+                    {tracker.fields
+                      .map((field) => field.label)
+                      .filter(Boolean)
+                      .join(" · ") || "Deine persönlichen Einträge"}
+                  </p>
                 </button>
                 <button
                   onClick={() => deleteTracker(tracker)}
-                  className="grid h-8 w-8 place-items-center rounded-full text-nook-muted hover:bg-rose-50 hover:text-rose-700"
+                  className="absolute right-5 top-5 grid h-8 w-8 place-items-center rounded-full text-nook-muted hover:bg-rose-50 hover:text-rose-700"
                   aria-label={`${tracker.name} löschen`}
                 >
                   <Trash2 size={14} />
                 </button>
+                <button
+                  onClick={() => {
+                    setEditingTrackerId(tracker.id);
+                    setTrackerName(tracker.name);
+                    setTrackerFields(tracker.fields);
+                    setTrackerColor(tracker.color);
+                    setTrackerError("");
+                    setTrackerEditorOpen(true);
+                  }}
+                  className="absolute right-14 top-5 grid h-8 w-8 place-items-center rounded-full text-nook-muted hover:bg-black/5 hover:text-nook-ink"
+                  aria-label={`${tracker.name} bearbeiten`}
+                >
+                  <Pencil size={14} />
+                </button>
               </div>
             ))}
           {!trackers.some((tracker) => tracker.type === "custom") && (
-            <p className="py-4 text-sm text-nook-muted">
+            <p className="rounded-[24px] border border-dashed border-black/10 bg-white/35 px-6 py-10 text-center text-sm text-nook-muted md:col-span-2">
               Noch keine eigenen Tracker.
             </p>
           )}
@@ -647,8 +711,12 @@ export function TrackingWorkspace({
       {trackerEditorOpen && (
         <Modal onClose={() => setTrackerEditorOpen(false)}>
           <ModalHeading
-            title="Eigener Tracker"
-            subtitle="Eine einfache Form für etwas, das du beobachten möchtest."
+            title={editingTrackerId ? "Tracker anpassen" : "Eigener Tracker"}
+            subtitle={
+              editingTrackerId
+                ? "Felder und Auswertung ruhig an deinen Alltag anpassen."
+                : "Eine einfache Form für etwas, das du beobachten möchtest."
+            }
             onClose={() => setTrackerEditorOpen(false)}
           />
           <label className="block text-sm font-medium">
@@ -749,25 +817,52 @@ export function TrackingWorkspace({
                   </button>
                 </div>
                 {(field.type === "number" || field.type === "duration") && (
-                  <label className="mt-3 block text-xs font-medium">
-                    Einheit
-                    <input
-                      value={field.unit ?? ""}
-                      onChange={(event) =>
-                        setTrackerFields((current) =>
-                          current.map((item, index) =>
-                            index === fieldIndex
-                              ? { ...item, unit: event.target.value }
-                              : item,
-                          ),
-                        )
-                      }
-                      className="mt-1.5 w-full rounded-[15px] border border-black/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-nook-violet"
-                      placeholder={
-                        field.type === "duration" ? "Stunden" : "ml, kg …"
-                      }
-                    />
-                  </label>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="block text-xs font-medium">
+                      Einheit
+                      <input
+                        value={field.unit ?? ""}
+                        onChange={(event) =>
+                          setTrackerFields((current) =>
+                            current.map((item, index) =>
+                              index === fieldIndex
+                                ? { ...item, unit: event.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        className="mt-1.5 w-full rounded-[15px] border border-black/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-nook-violet"
+                        placeholder={
+                          field.type === "duration" ? "Stunden" : "ml, kg …"
+                        }
+                      />
+                    </label>
+                    <label className="block text-xs font-medium">
+                      Zusammenfassung
+                      <select
+                        value={field.aggregation ?? "month"}
+                        onChange={(event) =>
+                          setTrackerFields((current) =>
+                            current.map((item, index) =>
+                              index === fieldIndex
+                                ? {
+                                    ...item,
+                                    aggregation: event.target
+                                      .value as TrackingField["aggregation"],
+                                  }
+                                : item,
+                            ),
+                          )
+                        }
+                        className="mt-1.5 w-full rounded-[15px] border border-black/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-nook-violet"
+                      >
+                        <option value="day">Heute</option>
+                        <option value="week">Diese Woche</option>
+                        <option value="month">Diesen Monat</option>
+                        <option value="none">Keine Summe</option>
+                      </select>
+                    </label>
+                  </div>
                 )}
                 {field.type === "multiselect" && (
                   <label className="mt-3 block text-xs font-medium">
@@ -1074,12 +1169,164 @@ function TrackingCalendar({
   );
 }
 
+function CustomTrackerOverview({
+  tracker,
+  entries,
+  onEdit,
+  onDelete,
+}: {
+  tracker: TrackingTracker;
+  entries: TrackingEntry[];
+  onEdit: (entry: TrackingEntry, tracker: TrackingTracker) => void;
+  onDelete: (entry: TrackingEntry) => void;
+}) {
+  const summableFields = tracker.fields.filter(
+    (field) =>
+      (field.type === "number" || field.type === "duration") &&
+      field.aggregation !== "none",
+  );
+  const today = zurichDateKey(new Date());
+  const todayDate = dateFromKey(today);
+  const weekday = todayDate.getUTCDay() || 7;
+  const weekStart = addDays(today, -(weekday - 1));
+
+  function periodFor(field: TrackingField) {
+    const aggregation = field.aggregation ?? "month";
+    const periodEntries = entries.filter((entry) => {
+      const key = zurichDateKey(entry.startedAt);
+      if (aggregation === "day") return key === today;
+      if (aggregation === "week") return key >= weekStart && key <= today;
+      return key.startsWith(today.slice(0, 7));
+    });
+    return {
+      entries: periodEntries,
+      label:
+        aggregation === "day"
+          ? "Heute"
+          : aggregation === "week"
+            ? "Diese Woche"
+            : "Diesen Monat",
+    };
+  }
+
+  return (
+    <div className="mt-6 border-t border-black/5 pt-6">
+      {summableFields.length > 0 && (
+        <div>
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <h3 className="font-semibold">Zusammenfassung</h3>
+              <p className="mt-1 text-xs text-nook-muted">
+                So, wie es für diesen Tracker hilfreich ist.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {summableFields.map((field) => {
+              const period = periodFor(field);
+              const total = period.entries.reduce(
+                (sum, entry) => sum + Number(entry.data[field.id] ?? 0),
+                0,
+              );
+              return (
+                <div
+                  key={field.id}
+                  className="rounded-[20px] bg-white/58 px-5 py-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-nook-muted">{field.label}</p>
+                    <p className="text-[11px] text-nook-muted">
+                      {period.label}
+                    </p>
+                  </div>
+                  <p className="mt-1 text-2xl font-semibold tracking-[-0.035em]">
+                    {new Intl.NumberFormat("de-CH", {
+                      maximumFractionDigits: 2,
+                    }).format(total)}
+                    {field.unit ? (
+                      <span className="ml-1 text-sm font-normal text-nook-muted">
+                        {field.unit}
+                      </span>
+                    ) : field.type === "duration" ? (
+                      <span className="ml-1 text-sm font-normal text-nook-muted">
+                        Min.
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className={summableFields.length ? "mt-7" : ""}>
+        <h3 className="font-semibold">Erfasste Werte</h3>
+        <div className="mt-3 divide-y divide-black/5">
+          {entries.slice(0, 12).map((entry) => {
+            const values = tracker.fields
+              .map((field) => ({
+                label: field.label,
+                value: formatTrackingValue(field, entry.data[field.id]),
+              }))
+              .filter((item) => item.value);
+            return (
+              <div key={entry.id} className="flex items-start gap-3 py-3.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-nook-muted">
+                    {new Intl.DateTimeFormat("de-CH", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    }).format(new Date(entry.startedAt))}
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                    {values.map((item) => (
+                      <p key={item.label} className="text-sm">
+                        <span className="text-nook-muted">{item.label}: </span>
+                        <span className="font-medium">{item.value}</span>
+                      </p>
+                    ))}
+                  </div>
+                  {entry.notes && (
+                    <p className="mt-2 text-sm text-nook-muted">{entry.notes}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => onEdit(entry, tracker)}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-nook-muted hover:bg-black/5"
+                  aria-label="Eintrag bearbeiten"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  onClick={() => onDelete(entry)}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-nook-muted hover:bg-rose-50 hover:text-rose-700"
+                  aria-label="Eintrag löschen"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            );
+          })}
+          {entries.length === 0 && (
+            <p className="py-8 text-center text-sm text-nook-muted">
+              Noch keine Werte erfasst.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CycleCalendar({
   trackers,
   entries,
+  onDaySelect,
 }: {
   trackers: TrackingTracker[];
   entries: TrackingEntry[];
+  onDaySelect: (date: string) => void;
 }) {
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const now = new Date();
@@ -1258,10 +1505,11 @@ function CycleCalendar({
               const isOvulation = key === ovulation;
               const hasSymptoms = symptomDays.has(key);
               return (
-                <div
+                <button
                   key={key}
+                  onClick={() => onDaySelect(key)}
                   className={[
-                    "relative grid aspect-square min-h-9 place-items-center rounded-xl text-xs sm:min-h-11",
+                    "relative grid aspect-square min-h-9 place-items-center rounded-xl text-xs transition duration-300 hover:brightness-[0.98] sm:min-h-11",
                     isActual
                       ? "bg-rose-200 text-rose-900"
                       : isPredicted
@@ -1290,7 +1538,7 @@ function CycleCalendar({
                   {hasSymptoms && (
                     <span className="absolute bottom-1 h-1.5 w-1.5 rounded-full bg-orange-500" />
                   )}
-                </div>
+                </button>
               );
             })}
           </div>

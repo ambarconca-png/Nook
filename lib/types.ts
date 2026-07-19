@@ -111,5 +111,6 @@ export type TrackingField = {
     | "multiselect"
     | "text";
   unit?: string;
+  aggregation?: "day" | "week" | "month" | "none";
   options: string[];
 };

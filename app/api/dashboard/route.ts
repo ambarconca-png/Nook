@@ -139,6 +139,11 @@ function cleanTrackingFields(value: unknown) {
         cleanText(field.id, 50).replace(/[^a-zA-Z0-9_-]/g, "") ||
         `field_${index + 1}`;
       const unit = cleanText(field.unit, 40) || undefined;
+      const aggregation = cleanRoutineChoice(
+        field.aggregation,
+        ["day", "week", "month", "none"],
+        "month",
+      );
       const options = Array.isArray(field.options)
         ? field.options
             .filter((option): option is string => typeof option === "string")
@@ -146,9 +151,20 @@ function cleanTrackingFields(value: unknown) {
             .filter(Boolean)
             .slice(0, 20)
         : [];
-      return label ? { id, label, type, unit, options } : null;
+      return label ? { id, label, type, unit, aggregation, options } : null;
     })
-    .filter(Boolean);
+    .filter(
+      (
+        field,
+      ): field is {
+        id: string;
+        label: string;
+        type: string;
+        unit: string | undefined;
+        aggregation: string;
+        options: string[];
+      } => field !== null,
+    );
 }
 
 function currentWeekBounds() {
@@ -1146,6 +1162,62 @@ export async function POST(request: Request) {
         );
       }
       return NextResponse.json({ id: tracker.id });
+    }
+
+    if (action === "update-custom-tracker") {
+      const id = cleanText(body.id, 50);
+      const name = cleanText(body.name, 100);
+      const color = cleanRoutineChoice(
+        body.color,
+        ["rose", "peach", "violet", "blue", "teal"],
+        "violet",
+      );
+      const fields = cleanTrackingFields(body.fields);
+      if (!name || fields.length === 0) {
+        return NextResponse.json(
+          { error: "Name und mindestens ein Feld sind erforderlich." },
+          { status: 400 },
+        );
+      }
+      const [tracker] = await db
+        .update(trackingTrackers)
+        .set({
+          name,
+          inputType: fields[0].type,
+          unit: fields[0].unit ?? null,
+          options: JSON.stringify(fields[0].options),
+          fields: JSON.stringify(fields),
+          color,
+        })
+        .where(
+          and(
+            eq(trackingTrackers.id, id),
+            eq(trackingTrackers.userId, user.id),
+            eq(trackingTrackers.type, "custom"),
+          ),
+        )
+        .returning({
+          id: trackingTrackers.id,
+          type: trackingTrackers.type,
+          name: trackingTrackers.name,
+          inputType: trackingTrackers.inputType,
+          unit: trackingTrackers.unit,
+          color: trackingTrackers.color,
+        });
+      if (!tracker) {
+        return NextResponse.json(
+          { error: "Tracker nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({
+        tracker: {
+          ...tracker,
+          unit: tracker.unit ?? undefined,
+          options: fields[0].options,
+          fields,
+        },
+      });
     }
 
     if (action === "create-tracking-entry") {
