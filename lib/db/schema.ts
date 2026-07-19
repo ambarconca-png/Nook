@@ -208,6 +208,17 @@ export const routines = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     weeklyTarget: integer("weekly_target").notNull().default(3),
+    category: text("category").notNull().default("Alltag"),
+    rhythm: text("rhythm").notNull().default("flexible"),
+    period: text("period").notNull().default("week"),
+    amount: integer("amount"),
+    unit: text("unit").notNull().default("Einheit"),
+    preferredWeekdays: text("preferred_weekdays").notNull().default("[]"),
+    reminderTime: text("reminder_time"),
+    startDate: date("start_date"),
+    endDate: date("end_date"),
+    color: text("color").notNull().default("teal"),
+    symbol: text("symbol").notNull().default("repeat"),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

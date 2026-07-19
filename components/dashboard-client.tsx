@@ -62,6 +62,53 @@ const knowledgeProjectStatusLabels: Record<
   complete: "Abgeschlossen",
 };
 
+const routinePeriodLabels = {
+  day: "Tag",
+  week: "Woche",
+  month: "Monat",
+};
+
+const weekdayLabels = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+type RoutineDraft = {
+  title: string;
+  category: string;
+  rhythm: Routine["rhythm"];
+  period: Routine["period"];
+  target: number;
+  amount: string;
+  unit: string;
+  preferredWeekdays: number[];
+  reminderTime: string;
+  startDate: string;
+  endDate: string;
+  color: Routine["color"];
+  symbol: Routine["symbol"];
+};
+
+function emptyRoutineDraft(): RoutineDraft {
+  return {
+    title: "",
+    category: "Alltag",
+    rhythm: "flexible",
+    period: "week",
+    target: 3,
+    amount: "",
+    unit: "Minuten",
+    preferredWeekdays: [],
+    reminderTime: "",
+    startDate: new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Zurich",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date()),
+    endDate: "",
+    color: "teal",
+    symbol: "repeat",
+  };
+}
+
 function getGreeting(hour: number) {
   if (hour < 12) return "Guten Morgen";
   if (hour < 18) return "Guten Tag";
@@ -131,6 +178,12 @@ export function DashboardClient({
   const [knowledgePageSaving, setKnowledgePageSaving] = useState(false);
   const [tasks, setTasks] = useState(initialData.tasks);
   const [routines, setRoutines] = useState(initialData.routines);
+  const [routineEditorOpen, setRoutineEditorOpen] = useState(false);
+  const [editingRoutineId, setEditingRoutineId] = useState("");
+  const [routineDraft, setRoutineDraft] =
+    useState<RoutineDraft>(emptyRoutineDraft);
+  const [routineSaving, setRoutineSaving] = useState(false);
+  const [routineError, setRoutineError] = useState("");
   const [inboxItems, setInboxItems] = useState(initialData.inboxItems);
 
   const todayTasks = useMemo(
@@ -254,16 +307,28 @@ export function DashboardClient({
     }
   }
 
-  async function incrementRoutine(id: string) {
+  async function toggleRoutine(id: string) {
     try {
-      const result = await dashboardAction<{ completed: number }>({
-        action: "increment-routine",
+      const result = await dashboardAction<{
+        completed: number;
+        completedToday: boolean;
+        date: string;
+      }>({
+        action: "toggle-routine-completion",
         id,
       });
       setRoutines((current) =>
         current.map((routine) =>
           routine.id === id
-            ? { ...routine, completed: result.completed }
+            ? {
+                ...routine,
+                completed: result.completed,
+                completionDates: result.completedToday
+                  ? [...routine.completionDates, result.date]
+                  : routine.completionDates.filter(
+                      (date) => date !== result.date,
+                    ),
+              }
             : routine,
         ),
       );
@@ -384,18 +449,90 @@ export function DashboardClient({
     }
   }
 
-  async function addRoutine() {
-    const title = window.prompt("Wie heißt die Routine?");
-    if (!title?.trim()) return;
+  function openRoutineEditor(routine?: Routine) {
+    setEditingRoutineId(routine?.id ?? "");
+    setRoutineDraft(
+      routine
+        ? {
+            title: routine.title,
+            category: routine.category,
+            rhythm: routine.rhythm,
+            period: routine.period,
+            target: routine.target,
+            amount: routine.amount?.toString() ?? "",
+            unit: routine.unit,
+            preferredWeekdays: routine.preferredWeekdays,
+            reminderTime: routine.reminderTime ?? "",
+            startDate: routine.startDate ?? emptyRoutineDraft().startDate,
+            endDate: routine.endDate ?? "",
+            color: routine.color,
+            symbol: routine.symbol,
+          }
+        : emptyRoutineDraft(),
+    );
+    setRoutineError("");
+    setRoutineEditorOpen(true);
+  }
+
+  async function saveRoutine() {
+    if (!routineDraft.title.trim()) {
+      setRoutineError("Bitte gib der Routine einen Namen.");
+      return;
+    }
+    setRoutineSaving(true);
+    setRoutineError("");
     try {
       const result = await dashboardAction<{ routine: Routine }>({
-        action: "create-routine",
-        title,
-        target: 3,
+        action: editingRoutineId ? "update-routine" : "create-routine",
+        id: editingRoutineId || undefined,
+        ...routineDraft,
+        amount: routineDraft.amount ? Number(routineDraft.amount) : undefined,
       });
-      setRoutines((current) => [...current, result.routine]);
+      if (editingRoutineId) {
+        setRoutines((current) =>
+          current.map((routine) =>
+            routine.id === editingRoutineId
+              ? {
+                  ...routine,
+                  ...routineDraft,
+                  amount: routineDraft.amount
+                    ? Number(routineDraft.amount)
+                    : undefined,
+                }
+              : routine,
+          ),
+        );
+      } else {
+        setRoutines((current) => [...current, result.routine]);
+      }
+      setRoutineEditorOpen(false);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Routine konnte nicht gespeichert werden.");
+      setRoutineError(
+        error instanceof Error
+          ? error.message
+          : "Routine konnte nicht gespeichert werden.",
+      );
+    } finally {
+      setRoutineSaving(false);
+    }
+  }
+
+  async function deleteRoutine(routine: Routine) {
+    if (!window.confirm(`Möchtest du „${routine.title}“ wirklich löschen?`)) {
+      return;
+    }
+    try {
+      await dashboardAction({ action: "delete-routine", id: routine.id });
+      setRoutines((current) =>
+        current.filter((item) => item.id !== routine.id),
+      );
+      setRoutineEditorOpen(false);
+    } catch (error) {
+      setRoutineError(
+        error instanceof Error
+          ? error.message
+          : "Routine konnte nicht gelöscht werden.",
+      );
     }
   }
 
@@ -902,7 +1039,7 @@ export function DashboardClient({
                 icon={<Repeat2 size={19} />}
                 action={
                   <button
-                    onClick={addRoutine}
+                    onClick={() => openRoutineEditor()}
                     className="text-sm text-nook-teal"
                   >
                     + Routine
@@ -914,12 +1051,13 @@ export function DashboardClient({
                     <RoutineRow
                       key={routine.id}
                       routine={routine}
-                      onIncrement={() => incrementRoutine(routine.id)}
+                      onToggle={() => toggleRoutine(routine.id)}
+                      onEdit={() => openRoutineEditor(routine)}
                     />
                   ))}
                   {routines.length === 0 && (
                     <button
-                      onClick={addRoutine}
+                      onClick={() => openRoutineEditor()}
                       className="w-full py-7 text-left text-sm leading-6 text-nook-muted"
                     >
                       Noch keine Routinen. Beginne mit etwas, das dir guttut.
@@ -1192,29 +1330,76 @@ export function DashboardClient({
             title="Routinen"
             subtitle="Fortschritt ohne Streak-Druck."
             buttonLabel="Routine"
-            onButton={addRoutine}
+            onButton={() => openRoutineEditor()}
           >
             <div className="grid gap-5 md:grid-cols-2">
               {routines.map((routine) => (
                 <NookCard
                   key={routine.id}
                   title={routine.title}
-                  subtitle={`${routine.completed} von ${routine.target} diese Woche`}
+                  subtitle={`${routine.category} · ${routine.rhythm === "fixed" ? "Fester Rhythmus" : "Flexibles Ziel"}`}
                   action={
                     <button
-                      onClick={() => incrementRoutine(routine.id)}
+                      onClick={() => openRoutineEditor(routine)}
                       className="text-sm text-nook-teal"
                     >
-                      + Einheit
+                      Bearbeiten
                     </button>
                   }
                 >
                   <RoutineRow
                     routine={routine}
-                    onIncrement={() => incrementRoutine(routine.id)}
+                    onToggle={() => toggleRoutine(routine.id)}
+                    onEdit={() => openRoutineEditor(routine)}
                   />
+                  <div className="mt-2 grid gap-3 border-t border-black/5 pt-4 sm:grid-cols-2">
+                    <div className="rounded-[18px] bg-white/55 px-4 py-3">
+                      <p className="text-xs text-nook-muted">Ziel</p>
+                      <p className="mt-1 text-sm font-medium">
+                        {routine.target}× pro{" "}
+                        {routinePeriodLabels[
+                          routine.period
+                        ].toLowerCase()}
+                        {routine.amount
+                          ? ` · ${routine.amount} ${routine.unit}`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="rounded-[18px] bg-white/55 px-4 py-3">
+                      <p className="text-xs text-nook-muted">
+                        Rhythmus & Erinnerung
+                      </p>
+                      <p className="mt-1 text-sm font-medium">
+                        {routine.preferredWeekdays.length
+                          ? routine.preferredWeekdays
+                              .map((day) => weekdayLabels[day - 1])
+                              .join(", ")
+                          : "Wochentage frei"}
+                        {routine.reminderTime
+                          ? ` · ${routine.reminderTime} Uhr`
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <RoutineHistory routine={routine} />
                 </NookCard>
               ))}
+              {routines.length === 0 && (
+                <NookCard title="Deine erste Routine">
+                  <div className="py-6">
+                    <p className="max-w-lg leading-7 text-nook-muted">
+                      Wähle einen festen Rhythmus oder ein flexibles Ziel – so,
+                      wie es wirklich in deinen Alltag passt.
+                    </p>
+                    <button
+                      onClick={() => openRoutineEditor()}
+                      className="mt-5 rounded-2xl bg-nook-teal/10 px-4 py-2.5 text-sm text-nook-teal"
+                    >
+                      + Routine anlegen
+                    </button>
+                  </div>
+                </NookCard>
+              )}
             </div>
           </PageHeading>
         )}
@@ -1603,6 +1788,344 @@ export function DashboardClient({
               >
                 {captureSaving ? "Speichert …" : "Speichern"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {routineEditorOpen && (
+        <div
+          className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-black/25 p-4 backdrop-blur-md"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setRoutineEditorOpen(false);
+          }}
+        >
+          <div className="my-4 w-full max-w-2xl rounded-[28px] bg-nook-card p-6 shadow-nook">
+            <div className="mb-5 flex items-start justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-[-0.03em]">
+                  {editingRoutineId ? "Routine bearbeiten" : "Neue Routine"}
+                </h2>
+                <p className="mt-1 text-sm text-nook-muted">
+                  Ein Rhythmus, der dich trägt – nicht antreibt.
+                </p>
+              </div>
+              <button
+                onClick={() => setRoutineEditorOpen(false)}
+                className="grid h-9 w-9 place-items-center rounded-full bg-black/5"
+                aria-label="Schließen"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium">
+                Name
+                <input
+                  autoFocus
+                  value={routineDraft.title}
+                  onChange={(event) =>
+                    setRoutineDraft((current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }))
+                  }
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal focus:ring-4 focus:ring-nook-teal/10"
+                  placeholder="Zum Beispiel: Sport"
+                />
+              </label>
+              <label className="block text-sm font-medium">
+                Kategorie
+                <input
+                  value={routineDraft.category}
+                  onChange={(event) =>
+                    setRoutineDraft((current) => ({
+                      ...current,
+                      category: event.target.value,
+                    }))
+                  }
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+                  placeholder="Gesundheit, Zuhause …"
+                />
+              </label>
+            </div>
+
+            <div className="mt-5">
+              <p className="text-sm font-medium">Art der Routine</p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                {[
+                  {
+                    value: "flexible" as const,
+                    title: "Flexibles Ziel",
+                    text: "Die Einheiten passen frei in den Zeitraum.",
+                  },
+                  {
+                    value: "fixed" as const,
+                    title: "Fester Rhythmus",
+                    text: "Bestimmte Wochentage geben den Takt vor.",
+                  },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() =>
+                      setRoutineDraft((current) => ({
+                        ...current,
+                        rhythm: option.value,
+                      }))
+                    }
+                    className={[
+                      "rounded-[18px] border p-4 text-left transition",
+                      routineDraft.rhythm === option.value
+                        ? "border-nook-teal bg-nook-teal/8"
+                        : "border-black/10 bg-white/60",
+                    ].join(" ")}
+                  >
+                    <span className="block text-sm font-medium">
+                      {option.title}
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-nook-muted">
+                      {option.text}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <label className="block text-sm font-medium">
+                Häufigkeit
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={routineDraft.target}
+                  onChange={(event) =>
+                    setRoutineDraft((current) => ({
+                      ...current,
+                      target: Math.max(1, Number(event.target.value)),
+                    }))
+                  }
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+                />
+              </label>
+              <label className="block text-sm font-medium">
+                Zeitraum
+                <select
+                  value={routineDraft.period}
+                  onChange={(event) =>
+                    setRoutineDraft((current) => ({
+                      ...current,
+                      period: event.target.value as Routine["period"],
+                      target:
+                        event.target.value === "day" ? 1 : current.target,
+                    }))
+                  }
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+                >
+                  <option value="day">pro Tag</option>
+                  <option value="week">pro Woche</option>
+                  <option value="month">pro Monat</option>
+                </select>
+              </label>
+              <label className="block text-sm font-medium">
+                Dauer oder Menge
+                <div className="mt-2 flex">
+                  <input
+                    type="number"
+                    min={1}
+                    value={routineDraft.amount}
+                    onChange={(event) =>
+                      setRoutineDraft((current) => ({
+                        ...current,
+                        amount: event.target.value,
+                      }))
+                    }
+                    className="min-w-0 flex-1 rounded-l-[18px] border border-r-0 border-black/10 bg-white px-3 py-3 outline-none focus:border-nook-teal"
+                    placeholder="30"
+                  />
+                  <input
+                    value={routineDraft.unit}
+                    onChange={(event) =>
+                      setRoutineDraft((current) => ({
+                        ...current,
+                        unit: event.target.value,
+                      }))
+                    }
+                    className="w-24 rounded-r-[18px] border border-black/10 bg-white px-3 py-3 outline-none focus:border-nook-teal"
+                    placeholder="Min."
+                  />
+                </div>
+              </label>
+            </div>
+
+            <div className="mt-5">
+              <p className="text-sm font-medium">Bevorzugte Wochentage</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {weekdayLabels.map((label, index) => {
+                  const day = index + 1;
+                  const selected =
+                    routineDraft.preferredWeekdays.includes(day);
+                  return (
+                    <button
+                      key={label}
+                      onClick={() =>
+                        setRoutineDraft((current) => ({
+                          ...current,
+                          preferredWeekdays: selected
+                            ? current.preferredWeekdays.filter(
+                                (currentDay) => currentDay !== day,
+                              )
+                            : [...current.preferredWeekdays, day].sort(),
+                        }))
+                      }
+                      className={[
+                        "grid h-10 w-10 place-items-center rounded-full text-xs transition",
+                        selected
+                          ? "bg-nook-teal text-white"
+                          : "border border-black/10 bg-white/70 text-nook-muted",
+                      ].join(" ")}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <label className="block text-sm font-medium">
+                Erinnerung
+                <input
+                  type="time"
+                  value={routineDraft.reminderTime}
+                  onChange={(event) =>
+                    setRoutineDraft((current) => ({
+                      ...current,
+                      reminderTime: event.target.value,
+                    }))
+                  }
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+                />
+              </label>
+              <label className="block text-sm font-medium">
+                Startdatum
+                <input
+                  type="date"
+                  value={routineDraft.startDate}
+                  onChange={(event) =>
+                    setRoutineDraft((current) => ({
+                      ...current,
+                      startDate: event.target.value,
+                    }))
+                  }
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+                />
+              </label>
+              <label className="block text-sm font-medium">
+                Enddatum (optional)
+                <input
+                  type="date"
+                  value={routineDraft.endDate}
+                  onChange={(event) =>
+                    setRoutineDraft((current) => ({
+                      ...current,
+                      endDate: event.target.value,
+                    }))
+                  }
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-sm font-medium">Farbe</p>
+                <div className="mt-3 flex gap-3">
+                  {(["teal", "green", "rose", "violet", "blue"] as const).map(
+                    (color) => (
+                      <button
+                        key={color}
+                        onClick={() =>
+                          setRoutineDraft((current) => ({ ...current, color }))
+                        }
+                        className={[
+                          "h-8 w-8 rounded-full border-2",
+                          color === "teal"
+                            ? "bg-nook-teal"
+                            : color === "green"
+                              ? "bg-emerald-500"
+                              : color === "rose"
+                                ? "bg-rose-400"
+                                : color === "violet"
+                                  ? "bg-violet-400"
+                                  : "bg-blue-400",
+                          routineDraft.color === color
+                            ? "border-nook-ink"
+                            : "border-white",
+                        ].join(" ")}
+                        aria-label={`Farbe ${color}`}
+                      />
+                    ),
+                  )}
+                </div>
+              </div>
+              <label className="block text-sm font-medium">
+                Symbol
+                <select
+                  value={routineDraft.symbol}
+                  onChange={(event) =>
+                    setRoutineDraft((current) => ({
+                      ...current,
+                      symbol: event.target.value as Routine["symbol"],
+                    }))
+                  }
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+                >
+                  <option value="repeat">Rhythmus</option>
+                  <option value="activity">Bewegung</option>
+                  <option value="book">Lesen</option>
+                  <option value="heart">Gesundheit</option>
+                  <option value="leaf">Natur</option>
+                </select>
+              </label>
+            </div>
+
+            {routineError && (
+              <p className="mt-4 text-sm text-rose-700">{routineError}</p>
+            )}
+
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+              {editingRoutineId ? (
+                <button
+                  onClick={() => {
+                    const routine = routines.find(
+                      (item) => item.id === editingRoutineId,
+                    );
+                    if (routine) deleteRoutine(routine);
+                  }}
+                  className="rounded-2xl px-3 py-2.5 text-sm text-rose-700 transition hover:bg-rose-50"
+                >
+                  Routine löschen
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setRoutineEditorOpen(false)}
+                  className="rounded-2xl bg-black/5 px-4 py-2.5 text-sm"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={saveRoutine}
+                  disabled={routineSaving}
+                  className="rounded-2xl bg-nook-teal px-4 py-2.5 text-sm text-white disabled:cursor-wait disabled:opacity-60"
+                >
+                  {routineSaving ? "Speichert …" : "Speichern"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2033,5 +2556,77 @@ function PageHeading({
       </section>
       {children}
     </>
+  );
+}
+
+function RoutineHistory({ routine }: { routine: Routine }) {
+  const now = new Date();
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(now);
+    date.setDate(now.getDate() - 6 + index);
+    const key = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Zurich",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+    return {
+      key,
+      label: new Intl.DateTimeFormat("de-CH", { weekday: "short" })
+        .format(date)
+        .slice(0, 2),
+      done: routine.completionDates.includes(key),
+    };
+  });
+  const months = Array.from({ length: 5 }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - 4 + index, 1);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    return {
+      key,
+      label: new Intl.DateTimeFormat("de-CH", { month: "short" }).format(date),
+      count: routine.completionDates.filter((day) => day.startsWith(key)).length,
+    };
+  });
+  const max = Math.max(1, ...months.map((month) => month.count));
+
+  return (
+    <div className="mt-4 border-t border-black/5 pt-4">
+      <div className="mb-5 flex justify-between gap-2">
+        {days.map((day) => (
+          <div key={day.key} className="flex flex-col items-center gap-2">
+            <span
+              className={[
+                "grid h-7 w-7 place-items-center rounded-full border",
+                day.done
+                  ? "border-nook-teal bg-nook-teal text-white"
+                  : "border-black/10 bg-white/55",
+              ].join(" ")}
+            >
+              {day.done && <CheckCircle2 size={13} />}
+            </span>
+            <span className="text-[10px] text-nook-muted">{day.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-end gap-3">
+        {months.map((month) => (
+          <div key={month.key} className="flex flex-1 flex-col items-center gap-2">
+            <div className="flex h-16 w-full items-end rounded-xl bg-white/45 px-1">
+              <div
+                className="w-full rounded-lg bg-nook-teal/45 transition-all duration-700"
+                style={{
+                  height: `${Math.max(8, (month.count / max) * 100)}%`,
+                }}
+                title={`${month.count} Einheiten`}
+              />
+            </div>
+            <span className="text-[10px] text-nook-muted">{month.label}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs leading-5 text-nook-muted">
+        Dein Verlauf zeigt Regelmäßigkeit, nicht Perfektion.
+      </p>
+    </div>
   );
 }

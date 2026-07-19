@@ -61,6 +61,54 @@ function cleanProjectBlockContent(value: unknown) {
   }
 }
 
+function cleanRoutinePeriod(value: unknown) {
+  const period = cleanText(value, 8);
+  return ["day", "month"].includes(period) ? period : "week";
+}
+
+function cleanRoutineRhythm(value: unknown) {
+  return cleanText(value, 10) === "fixed" ? "fixed" : "flexible";
+}
+
+function cleanRoutineChoice(
+  value: unknown,
+  allowed: string[],
+  fallback: string,
+) {
+  const choice = cleanText(value, 20);
+  return allowed.includes(choice) ? choice : fallback;
+}
+
+function routinePeriodBounds(period: string) {
+  const today = localDate();
+  if (period === "day") return { start: today, end: today };
+  if (period === "month") {
+    const date = new Date(`${today}T12:00:00Z`);
+    return {
+      start: `${today.slice(0, 7)}-01`,
+      end: new Date(
+        Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
+      )
+        .toISOString()
+        .slice(0, 10),
+    };
+  }
+  return currentWeekBounds();
+}
+
+function cleanWeekdays(value: unknown) {
+  if (!Array.isArray(value)) return "[]";
+  return JSON.stringify(
+    value.filter(
+      (day): day is number =>
+        typeof day === "number" &&
+        Number.isInteger(day) &&
+        day >= 1 &&
+        day <= 7,
+    ),
+  );
+}
+
 function currentWeekBounds() {
   const today = localDate();
   const date = new Date(`${today}T12:00:00Z`);
@@ -265,7 +313,22 @@ export async function POST(request: Request) {
 
         return {
           destination,
-          routine: { ...routine, completed: 0 },
+          routine: {
+            ...routine,
+            category: "Alltag",
+            rhythm: "flexible",
+            period: "week",
+            amount: undefined,
+            unit: "Einheit",
+            preferredWeekdays: [],
+            reminderTime: undefined,
+            startDate: undefined,
+            endDate: undefined,
+            color: "teal",
+            symbol: "repeat",
+            completed: 0,
+            completionDates: [],
+          },
         };
       });
 
@@ -954,7 +1017,32 @@ export async function POST(request: Request) {
       const title = cleanText(body.title, 120);
       const requestedTarget =
         typeof body.target === "number" ? Math.round(body.target) : 3;
-      const target = Math.min(14, Math.max(1, requestedTarget));
+      let target = Math.min(31, Math.max(1, requestedTarget));
+      const category = cleanText(body.category, 80) || "Alltag";
+      const rhythm = cleanRoutineRhythm(body.rhythm);
+      const period = cleanRoutinePeriod(body.period);
+      if (period === "day") target = 1;
+      const requestedAmount =
+        typeof body.amount === "number" ? Math.round(body.amount) : 0;
+      const amount =
+        requestedAmount > 0 ? Math.min(10000, requestedAmount) : null;
+      const unit = cleanText(body.unit, 40) || "Einheit";
+      const preferredWeekdays = cleanWeekdays(body.preferredWeekdays);
+      const reminderTime = /^\d{2}:\d{2}$/.test(cleanText(body.reminderTime, 5))
+        ? cleanText(body.reminderTime, 5)
+        : null;
+      const startDate = cleanDate(body.startDate) ?? localDate();
+      const endDate = cleanDate(body.endDate);
+      const color = cleanRoutineChoice(
+        body.color,
+        ["teal", "green", "rose", "violet", "blue"],
+        "teal",
+      );
+      const symbol = cleanRoutineChoice(
+        body.symbol,
+        ["repeat", "activity", "book", "heart", "leaf"],
+        "repeat",
+      );
       if (!title) {
         return NextResponse.json(
           { error: "Bitte gib eine Routine ein." },
@@ -964,23 +1052,141 @@ export async function POST(request: Request) {
 
       const [routine] = await db
         .insert(routines)
-        .values({ userId: user.id, title, weeklyTarget: target })
+        .values({
+          userId: user.id,
+          title,
+          weeklyTarget: target,
+          category,
+          rhythm,
+          period,
+          amount,
+          unit,
+          preferredWeekdays,
+          reminderTime,
+          startDate,
+          endDate,
+          color,
+          symbol,
+        })
         .returning({
           id: routines.id,
           title: routines.title,
+          category: routines.category,
+          rhythm: routines.rhythm,
+          period: routines.period,
           target: routines.weeklyTarget,
+          amount: routines.amount,
+          unit: routines.unit,
+          preferredWeekdays: routines.preferredWeekdays,
+          reminderTime: routines.reminderTime,
+          startDate: routines.startDate,
+          endDate: routines.endDate,
+          color: routines.color,
+          symbol: routines.symbol,
         });
-      return NextResponse.json({ routine: { ...routine, completed: 0 } });
+      return NextResponse.json({
+        routine: {
+          ...routine,
+          preferredWeekdays: JSON.parse(routine.preferredWeekdays),
+          reminderTime: routine.reminderTime ?? undefined,
+          startDate: routine.startDate ?? undefined,
+          endDate: routine.endDate ?? undefined,
+          amount: routine.amount ?? undefined,
+          completed: 0,
+          completionDates: [],
+        },
+      });
     }
 
-    if (action === "increment-routine") {
+    if (action === "update-routine") {
+      const id = cleanText(body.id, 50);
+      const title = cleanText(body.title, 120);
+      const requestedTarget =
+        typeof body.target === "number" ? Math.round(body.target) : 3;
+      let target = Math.min(31, Math.max(1, requestedTarget));
+      const category = cleanText(body.category, 80) || "Alltag";
+      const rhythm = cleanRoutineRhythm(body.rhythm);
+      const period = cleanRoutinePeriod(body.period);
+      if (period === "day") target = 1;
+      const requestedAmount =
+        typeof body.amount === "number" ? Math.round(body.amount) : 0;
+      const amount =
+        requestedAmount > 0 ? Math.min(10000, requestedAmount) : null;
+      const unit = cleanText(body.unit, 40) || "Einheit";
+      const preferredWeekdays = cleanWeekdays(body.preferredWeekdays);
+      const reminderTime = /^\d{2}:\d{2}$/.test(cleanText(body.reminderTime, 5))
+        ? cleanText(body.reminderTime, 5)
+        : null;
+      const startDate = cleanDate(body.startDate) ?? localDate();
+      const endDate = cleanDate(body.endDate);
+      const color = cleanRoutineChoice(
+        body.color,
+        ["teal", "green", "rose", "violet", "blue"],
+        "teal",
+      );
+      const symbol = cleanRoutineChoice(
+        body.symbol,
+        ["repeat", "activity", "book", "heart", "leaf"],
+        "repeat",
+      );
+
+      if (!title) {
+        return NextResponse.json(
+          { error: "Bitte gib der Routine einen Namen." },
+          { status: 400 },
+        );
+      }
+
+      const [routine] = await db
+        .update(routines)
+        .set({
+          title,
+          weeklyTarget: target,
+          category,
+          rhythm,
+          period,
+          amount,
+          unit,
+          preferredWeekdays,
+          reminderTime,
+          startDate,
+          endDate,
+          color,
+          symbol,
+        })
+        .where(and(eq(routines.id, id), eq(routines.userId, user.id)))
+        .returning({ id: routines.id });
+      if (!routine) {
+        return NextResponse.json(
+          { error: "Routine nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ id });
+    }
+
+    if (action === "delete-routine") {
       const id = cleanText(body.id, 50);
       const [routine] = await db
-        .select({ id: routines.id })
+        .delete(routines)
+        .where(and(eq(routines.id, id), eq(routines.userId, user.id)))
+        .returning({ id: routines.id });
+      if (!routine) {
+        return NextResponse.json(
+          { error: "Routine nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ id });
+    }
+
+    if (action === "toggle-routine-completion") {
+      const id = cleanText(body.id, 50);
+      const [routine] = await db
+        .select({ id: routines.id, period: routines.period })
         .from(routines)
         .where(and(eq(routines.id, id), eq(routines.userId, user.id)))
         .limit(1);
-
       if (!routine) {
         return NextResponse.json(
           { error: "Routine nicht gefunden." },
@@ -988,27 +1194,47 @@ export async function POST(request: Request) {
         );
       }
 
-      await db
-        .insert(routineCompletions)
-        .values({
+      const today = localDate();
+      const [todayCompletion] = await db
+        .select({ id: routineCompletions.id })
+        .from(routineCompletions)
+        .where(
+          and(
+            eq(routineCompletions.routineId, id),
+            eq(routineCompletions.userId, user.id),
+            eq(routineCompletions.completedOn, today),
+          ),
+        )
+        .limit(1);
+      if (todayCompletion) {
+        await db
+          .delete(routineCompletions)
+          .where(eq(routineCompletions.id, todayCompletion.id));
+      } else {
+        await db.insert(routineCompletions).values({
           routineId: id,
           userId: user.id,
-          completedOn: localDate(),
-        })
-        .onConflictDoNothing();
+          completedOn: today,
+        });
+      }
 
-      const week = currentWeekBounds();
+      const bounds = routinePeriodBounds(routine.period);
       const [{ value: completed }] = await db
         .select({ value: count() })
         .from(routineCompletions)
         .where(
           and(
             eq(routineCompletions.routineId, id),
-            gte(routineCompletions.completedOn, week.start),
-            lte(routineCompletions.completedOn, week.end),
+            gte(routineCompletions.completedOn, bounds.start),
+            lte(routineCompletions.completedOn, bounds.end),
           ),
         );
-      return NextResponse.json({ id, completed });
+      return NextResponse.json({
+        id,
+        completed,
+        completedToday: !todayCompletion,
+        date: today,
+      });
     }
 
     return NextResponse.json({ error: "Unbekannte Aktion." }, { status: 400 });

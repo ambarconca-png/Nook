@@ -43,6 +43,13 @@
       "when": 1784466408839,
       "tag": "0005_fat_chronomancer",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784467787688,
+      "tag": "0006_smart_iron_fist",
+      "breakpoints": true
     }
   ]
 }

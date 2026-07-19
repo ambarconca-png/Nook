@@ -52,8 +52,20 @@ export type Task = {
 export type Routine = {
   id: string;
   title: string;
+  category: string;
+  rhythm: "flexible" | "fixed";
+  period: "day" | "week" | "month";
   target: number;
   completed: number;
+  amount?: number;
+  unit: string;
+  preferredWeekdays: number[];
+  reminderTime?: string;
+  startDate?: string;
+  endDate?: string;
+  color: "teal" | "green" | "rose" | "violet" | "blue";
+  symbol: "repeat" | "activity" | "book" | "heart" | "leaf";
+  completionDates: string[];
 };
 
 export type InboxItem = {

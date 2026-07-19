@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import {
   areas,
@@ -50,6 +50,22 @@ function currentWeekBounds() {
   };
 }
 
+function periodBounds(period: Routine["period"], today: string) {
+  if (period === "day") return { start: today, end: today };
+  const date = new Date(`${today}T12:00:00Z`);
+  if (period === "month") {
+    return {
+      start: `${today.slice(0, 7)}-01`,
+      end: new Date(
+        Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
+      )
+        .toISOString()
+        .slice(0, 10),
+    };
+  }
+  return currentWeekBounds();
+}
+
 export type DashboardData = {
   areas: Area[];
   projects: Project[];
@@ -64,7 +80,6 @@ export type DashboardData = {
 export async function getDashboardData(userId: string): Promise<DashboardData> {
   const db = getDb();
   const today = localDate();
-  const week = currentWeekBounds();
 
   const [
     areaRows,
@@ -75,6 +90,7 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
     taskRows,
     inboxRows,
     routineRows,
+    routineCompletionRows,
   ] =
     await Promise.all([
     db
@@ -160,25 +176,49 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
       )
       .orderBy(desc(inboxItems.createdAt))
       .limit(20),
-    db
-      .select({
-        id: routines.id,
-        title: routines.title,
-        target: routines.weeklyTarget,
-        completed: count(routineCompletions.id),
-      })
-      .from(routines)
-      .leftJoin(
-        routineCompletions,
-        and(
-          eq(routineCompletions.routineId, routines.id),
-          gte(routineCompletions.completedOn, week.start),
-          lte(routineCompletions.completedOn, week.end),
+      db
+        .select({
+          id: routines.id,
+          title: routines.title,
+          category: routines.category,
+          rhythm: routines.rhythm,
+          period: routines.period,
+          target: routines.weeklyTarget,
+          amount: routines.amount,
+          unit: routines.unit,
+          preferredWeekdays: routines.preferredWeekdays,
+          reminderTime: routines.reminderTime,
+          startDate: routines.startDate,
+          endDate: routines.endDate,
+          color: routines.color,
+          symbol: routines.symbol,
+        })
+        .from(routines)
+        .where(and(eq(routines.userId, userId), eq(routines.active, true)))
+        .orderBy(asc(routines.createdAt)),
+      db
+        .select({
+          routineId: routineCompletions.routineId,
+          completedOn: routineCompletions.completedOn,
+        })
+        .from(routineCompletions)
+        .where(
+          and(
+            eq(routineCompletions.userId, userId),
+            gte(
+              routineCompletions.completedOn,
+              new Date(
+                Date.UTC(
+                  Number(today.slice(0, 4)),
+                  Number(today.slice(5, 7)) - 7,
+                  1,
+                ),
+              )
+                .toISOString()
+                .slice(0, 10),
+            ),
+          ),
         ),
-      )
-      .where(and(eq(routines.userId, userId), eq(routines.active, true)))
-      .groupBy(routines.id)
-      .orderBy(asc(routines.createdAt)),
     ]);
 
   return {
@@ -216,7 +256,51 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
         : "none",
       done: Boolean(task.completedAt),
     })),
-    routines: routineRows,
+    routines: routineRows.map((routine) => {
+      const period = ["day", "month"].includes(routine.period)
+        ? (routine.period as Routine["period"])
+        : "week";
+      const completionDates = routineCompletionRows
+        .filter((completion) => completion.routineId === routine.id)
+        .map((completion) => completion.completedOn);
+      const bounds = periodBounds(period, today);
+      return {
+        id: routine.id,
+        title: routine.title,
+        category: routine.category,
+        rhythm: routine.rhythm === "fixed" ? "fixed" : "flexible",
+        period,
+        target: routine.target,
+        completed: completionDates.filter(
+          (date) => date >= bounds.start && date <= bounds.end,
+        ).length,
+        amount: routine.amount ?? undefined,
+        unit: routine.unit,
+        preferredWeekdays: (() => {
+          try {
+            const days = JSON.parse(routine.preferredWeekdays);
+            return Array.isArray(days)
+              ? days.filter(
+                  (day): day is number =>
+                    Number.isInteger(day) && day >= 1 && day <= 7,
+                )
+              : [];
+          } catch {
+            return [];
+          }
+        })(),
+        reminderTime: routine.reminderTime ?? undefined,
+        startDate: routine.startDate ?? undefined,
+        endDate: routine.endDate ?? undefined,
+        color: ["green", "rose", "violet", "blue"].includes(routine.color)
+          ? (routine.color as Routine["color"])
+          : "teal",
+        symbol: ["activity", "book", "heart", "leaf"].includes(routine.symbol)
+          ? (routine.symbol as Routine["symbol"])
+          : "repeat",
+        completionDates,
+      };
+    }),
     inboxItems: inboxRows.map((item) => ({
       ...item,
       createdAt: item.createdAt.toISOString(),
