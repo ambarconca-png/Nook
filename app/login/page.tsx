@@ -10,15 +10,15 @@ export default async function LoginPage() {
   if (user) redirect("/");
 
   return (
-    <main className="relative grid min-h-screen place-items-center overflow-hidden px-5 py-12 text-nook-ink">
+    <main data-module="today" className="relative grid min-h-screen place-items-center overflow-hidden bg-nook-background px-4 py-12 text-nook-ink sm:px-6">
       <SmokeBackground />
 
-      <section className="relative z-10 w-full max-w-[440px] rounded-[28px] border border-white/80 bg-white/72 p-7 shadow-[0_35px_100px_rgba(67,47,42,0.16)] backdrop-blur-3xl sm:p-9">
-        <div className="font-serif text-[38px] tracking-[-0.08em]">nook</div>
+      <section className="relative z-10 w-full max-w-[440px] rounded-[24px] border border-black/[0.08] bg-nook-card/80 p-7 shadow-nook backdrop-blur-3xl sm:p-9">
+        <div className="text-[34px] font-medium tracking-[-0.055em]">nook</div>
 
         <div className="mt-12">
           <p className="text-sm text-nook-teal">Willkommen zu Hause</p>
-          <h1 className="mt-2 text-[34px] font-semibold leading-tight tracking-[-0.045em]">
+          <h1 className="mt-2 text-[28px] font-semibold leading-[1.2] tracking-[-0.035em] sm:text-[32px]">
             Dein ruhiger Ort
             <br />
             für den Alltag.

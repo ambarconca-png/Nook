@@ -621,7 +621,7 @@ export function TrackingWorkspace({
             {lastThirtyDays.length === 1 ? "Eintrag" : "Einträge"} erfasst
           </p>
           <p className="mt-5 text-xs leading-5 text-nook-muted">
-            Nook zeigt hier später mögliche Muster als Beobachtungen. Diese
+            nook zeigt hier später mögliche Muster als Beobachtungen. Diese
             Hinweise ersetzen keine medizinische Einschätzung oder Diagnose.
           </p>
         </section>

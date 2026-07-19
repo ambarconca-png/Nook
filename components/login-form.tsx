@@ -30,7 +30,7 @@ export function LoginForm() {
 
       window.location.href = "/";
     } catch {
-      setError("Nook konnte nicht erreicht werden. Bitte versuche es erneut.");
+      setError("nook konnte nicht erreicht werden. Bitte versuche es erneut.");
     } finally {
       setLoading(false);
     }
@@ -46,7 +46,7 @@ export function LoginForm() {
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="h-[52px] w-full rounded-[18px] border border-black/10 bg-white/70 px-4 py-3.5 outline-none transition focus:border-nook-teal/50 focus:bg-white focus:ring-4 focus:ring-nook-teal/10"
+          className="h-[52px] w-full rounded-[14px] border border-black/10 bg-white/70 px-4 py-3.5 outline-none transition focus:border-nook-teal/50 focus:bg-white focus:ring-4 focus:ring-nook-teal/10"
           placeholder="du@beispiel.ch"
         />
       </label>
@@ -60,7 +60,7 @@ export function LoginForm() {
             required
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="h-[52px] w-full rounded-[18px] border border-black/10 bg-white/70 px-4 py-3.5 pr-12 outline-none transition focus:border-nook-teal/50 focus:bg-white focus:ring-4 focus:ring-nook-teal/10"
+            className="h-[52px] w-full rounded-[14px] border border-black/10 bg-white/70 px-4 py-3.5 pr-12 outline-none transition focus:border-nook-teal/50 focus:bg-white focus:ring-4 focus:ring-nook-teal/10"
             placeholder="Dein Passwort"
           />
           <button
@@ -86,14 +86,14 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-nook-teal px-5 py-3.5 font-medium text-white shadow-[0_14px_32px_rgba(46,151,139,0.22)] transition hover:bg-[#287f76] disabled:cursor-wait disabled:opacity-70"
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-nook-teal px-5 py-3.5 font-medium text-white shadow-nook transition duration-200 hover:brightness-95 disabled:cursor-wait disabled:opacity-70"
       >
         {loading ? (
           <LoaderCircle size={18} className="animate-spin" />
         ) : (
           <LogIn size={18} />
         )}
-        {loading ? "Nook wird geöffnet …" : "Nook öffnen"}
+        {loading ? "nook wird geöffnet …" : "nook öffnen"}
       </button>
 
       <p className="text-center text-xs leading-5 text-nook-muted">

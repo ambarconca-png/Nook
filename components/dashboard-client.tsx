@@ -1,19 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Bell,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   ClipboardCheck,
   FolderKanban,
   FileText,
   HeartPulse,
-  Home,
   Inbox,
   LogOut,
   Menu,
+  Moon,
+  NotebookPen,
   Pencil,
   Plus,
   Repeat2,
@@ -45,12 +47,12 @@ import type {
 type PageId = "today" | "inbox" | "todos" | "routines" | "tracking" | "projects";
 
 const navigation = [
-  { id: "today" as PageId, label: "Heute", icon: Home },
-  { id: "inbox" as PageId, label: "Inbox", icon: Inbox },
+  { id: "today" as PageId, label: "Heute", icon: CalendarDays },
   { id: "todos" as PageId, label: "To-dos", icon: CheckCircle2 },
   { id: "routines" as PageId, label: "Routinen", icon: Repeat2 },
   { id: "tracking" as PageId, label: "Tracking", icon: HeartPulse },
-  { id: "projects" as PageId, label: "Projekte", icon: FolderKanban },
+  { id: "projects" as PageId, label: "Projekte", icon: NotebookPen },
+  { id: "inbox" as PageId, label: "Inbox", icon: Inbox },
 ];
 
 const knowledgeProjectStatusLabels: Record<
@@ -124,6 +126,7 @@ export function DashboardClient({
   initialData: DashboardData;
 }) {
   const [page, setPage] = useState<PageId>("today");
+  const [darkMode, setDarkMode] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [captureText, setCaptureText] = useState("");
@@ -186,6 +189,23 @@ export function DashboardClient({
   const [routineSaving, setRoutineSaving] = useState(false);
   const [routineError, setRoutineError] = useState("");
   const [inboxItems, setInboxItems] = useState(initialData.inboxItems);
+
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem("nook-theme");
+    const useDark =
+      storedTheme === "dark" ||
+      (!storedTheme &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches);
+    setDarkMode(useDark);
+    document.documentElement.classList.toggle("dark", useDark);
+  }, []);
+
+  function toggleTheme() {
+    const next = !darkMode;
+    setDarkMode(next);
+    document.documentElement.classList.toggle("dark", next);
+    window.localStorage.setItem("nook-theme", next ? "dark" : "light");
+  }
 
   const todayTasks = useMemo(
     () => tasks.filter((task) => task.dueToday),
@@ -540,7 +560,7 @@ export function DashboardClient({
   async function addProject(areaId?: string) {
     if (!areaId) {
       window.alert(
-        "Wissensprojekte werden in einem der nächsten Nook-Schritte freigeschaltet.",
+        "Wissensprojekte werden in einem der nächsten nook-Schritte freigeschaltet.",
       );
       return;
     }
@@ -876,11 +896,14 @@ export function DashboardClient({
   const greeting = getGreeting(now.getHours());
 
   return (
-    <div className="min-h-screen bg-nook-background text-nook-ink">
+    <div
+      data-module={page}
+      className="min-h-screen bg-nook-background text-nook-ink transition-colors duration-300"
+    >
       <SmokeBackground />
 
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-52 border-r border-black/5 bg-white/58 p-4 backdrop-blur-3xl lg:flex lg:flex-col">
-        <div className="px-3 pb-7 pt-2 font-serif text-[32px] tracking-[-0.08em]">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-black/5 bg-nook-card/72 p-5 backdrop-blur-3xl lg:flex lg:flex-col">
+        <div className="px-3 pb-8 pt-2 text-[30px] font-medium tracking-[-0.055em]">
           nook
         </div>
 
@@ -893,7 +916,7 @@ export function DashboardClient({
                 key={item.id}
                 onClick={() => setPage(item.id)}
                 className={[
-                  "flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition",
+                  "flex min-h-11 w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left text-sm transition duration-200",
                   active
                     ? "bg-nook-teal/10 text-nook-teal"
                     : "text-nook-ink/75 hover:bg-black/[0.035]",
@@ -911,7 +934,7 @@ export function DashboardClient({
           })}
         </nav>
 
-        <button className="mt-auto flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-nook-ink/70 hover:bg-black/[0.035]">
+        <button className="mt-auto flex min-h-11 items-center gap-3 rounded-[14px] px-3 py-2.5 text-sm text-nook-ink/70 hover:bg-black/[0.035]">
           <Settings size={19} strokeWidth={1.8} />
           Einstellungen
         </button>
@@ -934,8 +957,8 @@ export function DashboardClient({
         </button>
       </aside>
 
-      <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between border-b border-black/5 bg-white/65 px-4 py-3 backdrop-blur-2xl lg:hidden">
-        <div className="font-serif text-3xl tracking-[-0.08em]">nook</div>
+      <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between border-b border-black/5 bg-nook-card/72 px-4 py-3 backdrop-blur-2xl lg:hidden">
+        <div className="text-[28px] font-medium tracking-[-0.055em]">nook</div>
         <button
           onClick={() => setMenuOpen((current) => !current)}
           className="grid h-10 w-10 place-items-center rounded-full bg-white/80 shadow-sm"
@@ -965,6 +988,13 @@ export function DashboardClient({
           })}
           <div className="my-2 border-t border-black/5" />
           <button
+            onClick={toggleTheme}
+            className="flex min-h-11 w-full items-center gap-3 rounded-[14px] px-3 py-3 text-sm hover:bg-black/[0.035]"
+          >
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+            {darkMode ? "Heller Modus" : "Dunkler Modus"}
+          </button>
+          <button
             onClick={logout}
             className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm text-nook-ink/70 hover:bg-black/[0.035]"
           >
@@ -975,7 +1005,7 @@ export function DashboardClient({
       )}
 
       <div className="fixed right-7 top-6 z-20 hidden items-center gap-2 lg:flex">
-        {[Search, Bell, Sun].map((Icon, index) => (
+        {[Search, Bell].map((Icon, index) => (
           <button
             key={index}
             className="grid h-9 w-9 place-items-center rounded-full border border-white/70 bg-white/60 text-nook-ink/70 shadow-sm backdrop-blur-xl transition hover:bg-white"
@@ -983,13 +1013,20 @@ export function DashboardClient({
             <Icon size={17} strokeWidth={1.8} />
           </button>
         ))}
+        <button
+          onClick={toggleTheme}
+          className="grid h-11 w-11 place-items-center rounded-full border border-white/70 bg-white/60 text-nook-ink/70 shadow-sm backdrop-blur-xl transition hover:bg-white"
+          aria-label={darkMode ? "Hellen Modus verwenden" : "Dunklen Modus verwenden"}
+        >
+          {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
       </div>
 
-      <main className="relative z-10 mx-auto max-w-[1180px] px-4 pb-28 pt-24 lg:ml-52 lg:px-8 lg:pt-9 xl:px-10">
+      <main className="relative z-10 mx-auto max-w-[1120px] px-4 pb-28 pt-24 sm:px-6 lg:ml-60 lg:px-8 lg:pt-10 xl:px-12">
         {page === "today" && (
           <>
-            <section className="mb-7 min-h-36 pt-8 lg:pt-5">
-              <h1 className="text-4xl font-semibold tracking-[-0.045em] lg:text-[42px]">
+            <section className="mb-10 min-h-36 rounded-[24px] bg-gradient-to-br from-nook-teal/10 via-white/20 to-nook-violet/10 px-6 py-8 backdrop-blur-sm lg:px-8 lg:py-10">
+              <h1 className="text-[28px] font-semibold leading-[1.2] tracking-[-0.035em] lg:text-[32px]">
                 {greeting}, {displayName}.
               </h1>
               <p className="mt-2 text-sm text-nook-muted">{greetingDate}</p>
@@ -1712,9 +1749,9 @@ export function DashboardClient({
         )}
       </main>
 
-      <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-[22px] border border-white/80 bg-white/82 p-2 shadow-nook backdrop-blur-2xl lg:hidden">
+      <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-[20px] border border-black/[0.08] bg-nook-card/88 p-2 shadow-nook backdrop-blur-2xl lg:hidden">
         {navigation
-          .filter((item) => item.id !== "inbox")
+          .filter((item) => item.id !== "projects")
           .map((item) => {
             const Icon = item.icon;
             const active = page === item.id;
@@ -1723,7 +1760,7 @@ export function DashboardClient({
                 key={item.id}
                 onClick={() => setPage(item.id)}
                 className={[
-                  "flex flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[11px]",
+                  "flex min-h-11 flex-col items-center justify-center gap-1 rounded-[14px] px-1 py-1.5 text-[11px]",
                   active ? "bg-nook-teal/10 text-nook-teal" : "text-nook-muted",
                 ].join(" ")}
               >
@@ -1736,7 +1773,7 @@ export function DashboardClient({
 
       <button
         onClick={() => setCaptureOpen(true)}
-        className="fixed bottom-24 right-5 z-50 grid h-14 w-14 place-items-center rounded-full bg-nook-teal text-white shadow-[0_16px_36px_rgba(46,151,139,0.35)] lg:bottom-8 lg:right-8"
+        className="fixed bottom-24 right-5 z-50 grid h-14 w-14 place-items-center rounded-full bg-nook-teal text-white shadow-nook transition duration-200 hover:-translate-y-0.5 hover:brightness-95 lg:bottom-8 lg:right-8"
         aria-label="Schnell erfassen"
       >
         <Plus size={27} />
@@ -2547,14 +2584,16 @@ function PageHeading({
 }) {
   return (
     <>
-      <section className="mb-8 flex items-start justify-between gap-4 pt-5 lg:pt-0">
+      <section className="mb-10 flex items-start justify-between gap-4 pt-5 lg:pt-0">
         <div>
-          <h1 className="text-4xl font-semibold tracking-[-0.045em]">{title}</h1>
-          <p className="mt-2 text-nook-muted">{subtitle}</p>
+          <h1 className="text-[28px] font-semibold leading-[1.2] tracking-[-0.035em] lg:text-[32px]">
+            {title}
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-nook-muted">{subtitle}</p>
         </div>
         <button
           onClick={onButton}
-          className="flex items-center gap-2 rounded-2xl bg-nook-teal px-4 py-2.5 text-sm text-white shadow-sm"
+          className="flex min-h-11 items-center gap-2 rounded-[14px] bg-nook-teal px-4 py-2.5 text-sm font-medium text-white shadow-nook transition duration-200 hover:brightness-95"
         >
           <Plus size={17} />
           {buttonLabel}

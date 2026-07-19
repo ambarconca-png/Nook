@@ -4,6 +4,68 @@
 
 :root {
   color-scheme: light;
+  --nook-background: 247 247 245;
+  --nook-card: 255 255 255;
+  --nook-secondary: 240 240 236;
+  --nook-hover: 235 235 231;
+  --nook-ink: 32 32 31;
+  --nook-muted: 105 105 100;
+  --nook-subtle: 150 150 143;
+  --nook-line: 228 228 222;
+  --nook-violet: 133 111 173;
+  --nook-rose: 206 137 158;
+  --module-color: 40 125 121;
+  --module-soft: 221 242 238;
+  --smoke-teal: 85 189 178;
+  --smoke-violet: 168 149 199;
+  --smoke-peach: 229 164 135;
+}
+
+html.dark {
+  color-scheme: dark;
+  --nook-background: 17 18 16;
+  --nook-card: 26 27 24;
+  --nook-secondary: 35 36 31;
+  --nook-hover: 42 43 38;
+  --nook-ink: 245 245 241;
+  --nook-muted: 184 184 176;
+  --nook-subtle: 133 133 125;
+  --nook-line: 48 49 44;
+  --nook-violet: 178 164 209;
+  --nook-rose: 206 137 158;
+  --smoke-teal: 49 135 127;
+  --smoke-violet: 111 83 157;
+  --smoke-peach: 169 91 116;
+}
+
+[data-module="today"] {
+  --module-color: 40 125 121;
+  --module-soft: 221 242 238;
+}
+
+[data-module="todos"] {
+  --module-color: 89 99 169;
+  --module-soft: 230 237 248;
+}
+
+[data-module="routines"] {
+  --module-color: 95 142 104;
+  --module-soft: 232 240 229;
+}
+
+[data-module="tracking"] {
+  --module-color: 206 137 158;
+  --module-soft: 244 229 234;
+}
+
+[data-module="projects"] {
+  --module-color: 133 111 173;
+  --module-soft: 236 231 244;
+}
+
+[data-module="inbox"] {
+  --module-color: 105 105 100;
+  --module-soft: 240 240 236;
 }
 
 * {
@@ -11,24 +73,20 @@
 }
 
 html {
-  background: #f7f3f0;
+  background: rgb(var(--nook-background));
 }
 
 body {
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.96), transparent 27%),
-    radial-gradient(circle at 72% 18%, rgba(244, 221, 211, 0.38), transparent 35%),
-    #f7f3f0;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  background: rgb(var(--nook-background));
+  color: rgb(var(--nook-ink));
+  font-family: "Geist", "Inter", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -42,88 +100,141 @@ button {
   cursor: pointer;
 }
 
+input,
+textarea,
+select {
+  color: rgb(var(--nook-ink));
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select {
+  min-height: 44px;
+  border-radius: 14px !important;
+}
+
+textarea {
+  border-radius: 14px !important;
+}
+
+:focus-visible {
+  outline: 3px solid rgb(var(--module-color) / 0.22) !important;
+  outline-offset: 2px;
+}
+
+::placeholder {
+  color: rgb(var(--nook-subtle));
+}
+
+::selection {
+  background: rgb(var(--module-color) / 0.2);
+}
+
+.smoke-canvas {
+  background:
+    radial-gradient(circle at 18% 18%, rgb(var(--smoke-teal) / 0.24), transparent 34%),
+    radial-gradient(circle at 77% 12%, rgb(var(--smoke-violet) / 0.18), transparent 31%),
+    radial-gradient(circle at 62% 68%, rgb(var(--smoke-peach) / 0.15), transparent 34%);
+}
+
 .smoke {
   position: absolute;
-  border-radius: 999px;
-  filter: blur(34px);
-  opacity: 0.62;
+  border-radius: 47% 53% 65% 35% / 38% 48% 52% 62%;
+  filter: blur(48px);
+  opacity: 0.42;
   mix-blend-mode: multiply;
   transform-origin: center;
+  animation: smoke-drift 32s ease-in-out infinite alternate;
+}
+
+.dark .smoke {
+  opacity: 0.32;
+  mix-blend-mode: screen;
 }
 
 .smoke-slate {
-  top: -10rem;
-  right: 8%;
-  width: 34rem;
-  height: 19rem;
-  transform: rotate(19deg);
-  background: linear-gradient(115deg, transparent 4%, rgba(37, 48, 55, 0.65) 42%, rgba(209, 218, 211, 0.22) 78%);
+  top: -9rem;
+  right: 17%;
+  width: 32rem;
+  height: 18rem;
+  background: rgb(var(--smoke-teal) / 0.5);
 }
 
 .smoke-amber {
-  top: 0;
+  top: -2rem;
   right: -8rem;
-  width: 43rem;
-  height: 22rem;
-  transform: rotate(-21deg);
-  background: linear-gradient(120deg, rgba(247, 218, 177, 0.16), rgba(193, 119, 42, 0.62), rgba(242, 191, 128, 0.12));
+  width: 38rem;
+  height: 21rem;
+  background: rgb(var(--smoke-peach) / 0.42);
+  animation-delay: -8s;
 }
 
 .smoke-rose {
   top: 10rem;
-  right: -12rem;
-  width: 40rem;
-  height: 24rem;
-  transform: rotate(-34deg);
-  background: linear-gradient(130deg, rgba(255, 192, 186, 0.15), rgba(205, 70, 86, 0.63), rgba(238, 133, 111, 0.2));
+  right: -11rem;
+  width: 35rem;
+  height: 22rem;
+  background: rgb(var(--nook-rose) / 0.4);
+  animation-delay: -15s;
 }
 
 .smoke-violet {
-  top: 2rem;
-  right: 3%;
-  width: 25rem;
-  height: 31rem;
-  transform: rotate(35deg);
-  background: linear-gradient(145deg, rgba(100, 63, 145, 0.56), rgba(183, 135, 208, 0.24), transparent 78%);
+  top: 0;
+  right: 5%;
+  width: 24rem;
+  height: 29rem;
+  background: rgb(var(--smoke-violet) / 0.42);
+  animation-delay: -22s;
 }
 
 .smoke-mint {
   top: 17rem;
-  right: 21%;
-  width: 29rem;
-  height: 17rem;
-  transform: rotate(18deg);
-  background: linear-gradient(110deg, transparent, rgba(84, 139, 119, 0.38), rgba(198, 219, 201, 0.12));
+  right: 28%;
+  width: 27rem;
+  height: 15rem;
+  background: rgb(var(--smoke-teal) / 0.3);
+  animation-delay: -5s;
 }
 
-::selection {
-  background: rgba(46, 151, 139, 0.18);
+@keyframes smoke-drift {
+  from {
+    transform: translate3d(-4px, -2px, 0) rotate(-2deg) scale(0.98);
+  }
+  to {
+    transform: translate3d(8px, 6px, 0) rotate(3deg) scale(1.03);
+  }
+}
+
+.dark [class*="bg-white/"],
+.dark .bg-white {
+  background-color: rgb(var(--nook-card) / 0.88) !important;
+}
+
+.dark [class*="border-white/"],
+.dark [class*="border-black/"] {
+  border-color: rgb(var(--nook-line) / 0.88) !important;
+}
+
+.dark [class*="bg-black/5"],
+.dark [class*="bg-black/\\[0.0"] {
+  background-color: rgb(var(--nook-secondary) / 0.82) !important;
+}
+
+.dark input,
+.dark textarea,
+.dark select {
+  border-color: rgb(var(--nook-line)) !important;
+  background-color: rgb(var(--nook-secondary)) !important;
 }
 
 @media (max-width: 1023px) {
   .smoke {
-    opacity: 0.48;
-    filter: blur(38px);
+    opacity: 0.32;
+    filter: blur(54px);
   }
 
   .smoke-slate,
   .smoke-mint {
     display: none;
-  }
-
-  .smoke-amber {
-    top: 0;
-    right: -19rem;
-  }
-
-  .smoke-rose {
-    top: 7rem;
-    right: -21rem;
-  }
-
-  .smoke-violet {
-    top: 1rem;
-    right: -9rem;
   }
 }
 
