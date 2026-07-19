@@ -3,11 +3,13 @@
 import { useMemo, useState } from "react";
 import {
   Activity,
+  ArrowLeft,
   BarChart3,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   Droplets,
+  Pencil,
   Plus,
   SlidersHorizontal,
   Trash2,
@@ -58,6 +60,14 @@ const colorClasses = {
   teal: "bg-teal-100 text-teal-700",
 };
 
+const dotClasses = {
+  rose: "bg-rose-400",
+  peach: "bg-orange-400",
+  violet: "bg-violet-400",
+  blue: "bg-blue-400",
+  teal: "bg-teal-400",
+};
+
 function localDateTimeInput(date = new Date()) {
   const offset = date.getTimezoneOffset();
   return new Date(date.getTime() - offset * 60_000)
@@ -97,6 +107,11 @@ export function TrackingWorkspace({
   const [trackers, setTrackers] = useState(initialTrackers);
   const [entries, setEntries] = useState(initialEntries);
   const [entryTracker, setEntryTracker] = useState<TrackingTracker | null>(null);
+  const [activeTracker, setActiveTracker] = useState<TrackingTracker | null>(
+    null,
+  );
+  const [selectedDay, setSelectedDay] = useState("");
+  const [editingEntryId, setEditingEntryId] = useState("");
   const [entryStartedAt, setEntryStartedAt] = useState(localDateTimeInput);
   const [entryEndedAt, setEntryEndedAt] = useState("");
   const [entryNotes, setEntryNotes] = useState("");
@@ -122,6 +137,13 @@ export function TrackingWorkspace({
       ),
     [trackers],
   );
+  const allTrackers = useMemo(
+    () => [
+      ...visibleTrackers,
+      ...trackers.filter((tracker) => tracker.type === "custom"),
+    ],
+    [trackers, visibleTrackers],
+  );
 
   const lastThirtyDays = useMemo(() => {
     const start = new Date();
@@ -129,12 +151,32 @@ export function TrackingWorkspace({
     return entries.filter((entry) => new Date(entry.startedAt) >= start);
   }, [entries]);
 
-  function openEntry(tracker: TrackingTracker) {
+  function openEntry(tracker: TrackingTracker, day?: string) {
     setEntryTracker(tracker);
-    setEntryStartedAt(localDateTimeInput());
+    setEditingEntryId("");
+    setEntryStartedAt(
+      day
+        ? `${day}T${localDateTimeInput().slice(11, 16)}`
+        : localDateTimeInput(),
+    );
     setEntryEndedAt("");
     setEntryNotes("");
     setEntryData({});
+    setEntryError("");
+  }
+
+  function openEntryForEditing(
+    entry: TrackingEntry,
+    tracker: TrackingTracker,
+  ) {
+    setEntryTracker(tracker);
+    setEditingEntryId(entry.id);
+    setEntryStartedAt(localDateTimeInput(new Date(entry.startedAt)));
+    setEntryEndedAt(
+      entry.endedAt ? localDateTimeInput(new Date(entry.endedAt)) : "",
+    );
+    setEntryNotes(entry.notes);
+    setEntryData(entry.data);
     setEntryError("");
   }
 
@@ -143,24 +185,48 @@ export function TrackingWorkspace({
     setEntrySaving(true);
     setEntryError("");
     try {
-      const result = await trackingAction<{
-        tracker: TrackingTracker;
-        entry: TrackingEntry;
-      }>({
-        action: "create-tracking-entry",
-        trackerId: entryTracker.id || undefined,
-        trackerType: entryTracker.type,
-        startedAt: new Date(entryStartedAt).toISOString(),
-        endedAt: entryEndedAt
-          ? new Date(entryEndedAt).toISOString()
-          : undefined,
-        data: entryData,
-        notes: entryNotes,
-      });
-      if (!trackers.some((tracker) => tracker.id === result.tracker.id)) {
-        setTrackers((current) => [...current, result.tracker]);
+      if (editingEntryId) {
+        const result = await trackingAction<{ entry: TrackingEntry }>({
+          action: "update-tracking-entry",
+          id: editingEntryId,
+          startedAt: new Date(entryStartedAt).toISOString(),
+          endedAt: entryEndedAt
+            ? new Date(entryEndedAt).toISOString()
+            : undefined,
+          data: entryData,
+          notes: entryNotes,
+        });
+        setEntries((current) =>
+          current.map((entry) =>
+            entry.id === result.entry.id ? result.entry : entry,
+          ),
+        );
+      } else {
+        const result = await trackingAction<{
+          tracker: TrackingTracker;
+          entry: TrackingEntry;
+        }>({
+          action: "create-tracking-entry",
+          trackerId: entryTracker.id || undefined,
+          trackerType: entryTracker.type,
+          startedAt: new Date(entryStartedAt).toISOString(),
+          endedAt: entryEndedAt
+            ? new Date(entryEndedAt).toISOString()
+            : undefined,
+          data: entryData,
+          notes: entryNotes,
+        });
+        if (!trackers.some((tracker) => tracker.id === result.tracker.id)) {
+          setTrackers((current) => [...current, result.tracker]);
+        }
+        if (
+          activeTracker?.type === result.tracker.type &&
+          !activeTracker.id
+        ) {
+          setActiveTracker(result.tracker);
+        }
+        setEntries((current) => [result.entry, ...current]);
       }
-      setEntries((current) => [result.entry, ...current]);
       setEntryTracker(null);
     } catch (error) {
       setEntryError(
@@ -247,13 +313,81 @@ export function TrackingWorkspace({
     return trackers.find((tracker) => tracker.id === entry.trackerId);
   }
 
+  const selectedDayEntries = entries.filter((entry) => {
+    if (zurichDateKey(entry.startedAt) !== selectedDay) return false;
+    return !activeTracker || entry.trackerId === activeTracker.id;
+  });
+
   return (
     <>
+      <TrackingCalendar
+        title="Tracking-Kalender"
+        subtitle="Alle Einträge an einem ruhigen Ort. Wähle einen Tag für Details."
+        trackers={allTrackers}
+        entries={entries}
+        onDaySelect={setSelectedDay}
+      />
+
+      {activeTracker && (
+        <section className="mt-5 rounded-[24px] border border-white/80 bg-white/76 p-5 shadow-nook backdrop-blur-2xl sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setActiveTracker(null)}
+                className="grid h-10 w-10 place-items-center rounded-full bg-black/5 text-nook-muted"
+                aria-label="Zurück zur Übersicht"
+              >
+                <ArrowLeft size={17} />
+              </button>
+              <span
+                className={`grid h-11 w-11 place-items-center rounded-2xl ${colorClasses[activeTracker.color]}`}
+              >
+                {activeTracker.type === "menstruation" ? (
+                  <Droplets size={19} />
+                ) : activeTracker.type === "headache" ? (
+                  <Activity size={19} />
+                ) : (
+                  <SlidersHorizontal size={18} />
+                )}
+              </span>
+              <div>
+                <p className="text-xs text-nook-muted">Tracker</p>
+                <h2 className="text-xl font-semibold tracking-[-0.03em]">
+                  {activeTracker.name}
+                </h2>
+              </div>
+            </div>
+            <button
+              onClick={() => openEntry(activeTracker)}
+              className="flex items-center gap-2 rounded-2xl bg-nook-ink px-4 py-2.5 text-sm text-white"
+            >
+              <Plus size={15} />
+              Eintrag erfassen
+            </button>
+          </div>
+
+          <TrackingCalendar
+            title={`${activeTracker.name} im Kalender`}
+            subtitle="Wähle einen Tag, um Einträge anzusehen oder nachzutragen."
+            trackers={[activeTracker]}
+            entries={entries.filter(
+              (entry) => entry.trackerId === activeTracker.id,
+            )}
+            onDaySelect={setSelectedDay}
+            embedded
+          />
+
+          {activeTracker.type === "menstruation" && (
+            <CycleCalendar trackers={trackers} entries={entries} />
+          )}
+        </section>
+      )}
+
       <div className="grid gap-5 md:grid-cols-2">
         {visibleTrackers.map((tracker) => (
           <button
             key={tracker.type}
-            onClick={() => openEntry(tracker)}
+            onClick={() => setActiveTracker(tracker)}
             className="group rounded-[24px] border border-white/80 bg-white/72 p-6 text-left shadow-nook backdrop-blur-2xl transition duration-500 hover:-translate-y-0.5 hover:bg-white/82"
           >
             <div className="flex items-start justify-between">
@@ -282,8 +416,6 @@ export function TrackingWorkspace({
           </button>
         ))}
       </div>
-
-      <CycleCalendar trackers={trackers} entries={entries} />
 
       <section className="mt-5 rounded-[24px] border border-white/80 bg-white/72 p-5 shadow-nook backdrop-blur-2xl sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -318,7 +450,7 @@ export function TrackingWorkspace({
                 className="flex items-center gap-3 rounded-[20px] bg-white/58 p-3"
               >
                 <button
-                  onClick={() => openEntry(tracker)}
+                  onClick={() => setActiveTracker(tracker)}
                   className="flex min-w-0 flex-1 items-center gap-3 text-left"
                 >
                   <span
@@ -380,6 +512,15 @@ export function TrackingWorkspace({
                       </p>
                     )}
                   </div>
+                  {tracker && (
+                    <button
+                      onClick={() => openEntryForEditing(entry, tracker)}
+                      className="grid h-8 w-8 place-items-center rounded-full text-nook-muted hover:bg-black/5 hover:text-nook-ink"
+                      aria-label="Eintrag bearbeiten"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
                   <button
                     onClick={() => deleteEntry(entry)}
                     className="grid h-8 w-8 place-items-center rounded-full text-nook-muted hover:bg-rose-50 hover:text-rose-700"
@@ -420,6 +561,88 @@ export function TrackingWorkspace({
           </p>
         </section>
       </div>
+
+      {selectedDay && (
+        <Modal onClose={() => setSelectedDay("")}>
+          <ModalHeading
+            title={new Intl.DateTimeFormat("de-CH", {
+              dateStyle: "long",
+            }).format(dateFromKey(selectedDay))}
+            subtitle={
+              activeTracker
+                ? activeTracker.name
+                : "Einträge aus allen Trackern"
+            }
+            onClose={() => setSelectedDay("")}
+          />
+          <div className="space-y-2">
+            {selectedDayEntries.map((entry) => {
+              const tracker = trackerForEntry(entry);
+              if (!tracker) return null;
+              return (
+                <div
+                  key={entry.id}
+                  className="flex items-center gap-3 rounded-[18px] bg-white/58 p-3"
+                >
+                  <span
+                    className={`h-2.5 w-2.5 shrink-0 rounded-full ${dotClasses[tracker.color]}`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {tracker.name}
+                    </p>
+                    <p className="mt-0.5 text-xs text-nook-muted">
+                      {new Intl.DateTimeFormat("de-CH", {
+                        timeStyle: "short",
+                      }).format(new Date(entry.startedAt))}
+                      {entry.notes ? ` · ${entry.notes}` : ""}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedDay("");
+                      openEntryForEditing(entry, tracker);
+                    }}
+                    className="grid h-8 w-8 place-items-center rounded-full text-nook-muted hover:bg-black/5"
+                    aria-label="Eintrag bearbeiten"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={() => deleteEntry(entry)}
+                    className="grid h-8 w-8 place-items-center rounded-full text-nook-muted hover:bg-rose-50 hover:text-rose-700"
+                    aria-label="Eintrag löschen"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              );
+            })}
+            {selectedDayEntries.length === 0 && (
+              <p className="rounded-[18px] bg-white/45 px-4 py-7 text-center text-sm text-nook-muted">
+                An diesem Tag ist noch nichts erfasst.
+              </p>
+            )}
+          </div>
+          <div className="mt-5 border-t border-black/5 pt-4">
+            <p className="mb-3 text-xs text-nook-muted">Eintrag hinzufügen</p>
+            <div className="flex flex-wrap gap-2">
+              {(activeTracker ? [activeTracker] : allTrackers).map((tracker) => (
+                <button
+                  key={`${tracker.type}-${tracker.id}`}
+                  onClick={() => {
+                    setSelectedDay("");
+                    openEntry(tracker, selectedDay);
+                  }}
+                  className={`rounded-2xl px-3.5 py-2 text-xs ${colorClasses[tracker.color]}`}
+                >
+                  {tracker.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {trackerEditorOpen && (
         <Modal onClose={() => setTrackerEditorOpen(false)}>
@@ -605,8 +828,16 @@ export function TrackingWorkspace({
       {entryTracker && (
         <Modal onClose={() => setEntryTracker(null)} wide>
           <ModalHeading
-            title={entryTracker.name}
-            subtitle="Nur festhalten, was sich für dich hilfreich anfühlt."
+            title={
+              editingEntryId
+                ? `${entryTracker.name} bearbeiten`
+                : entryTracker.name
+            }
+            subtitle={
+              editingEntryId
+                ? "Passe den Eintrag in Ruhe an."
+                : "Nur festhalten, was sich für dich hilfreich anfühlt."
+            }
             onClose={() => setEntryTracker(null)}
           />
           <div className="grid gap-4 sm:grid-cols-2">
@@ -695,6 +926,152 @@ function daysBetween(start: string, end: string) {
 function dateRange(start: string, end: string) {
   const days = Math.max(0, Math.min(60, daysBetween(start, end)));
   return Array.from({ length: days + 1 }, (_, index) => addDays(start, index));
+}
+
+function TrackingCalendar({
+  title,
+  subtitle,
+  trackers,
+  entries,
+  onDaySelect,
+  embedded = false,
+}: {
+  title: string;
+  subtitle: string;
+  trackers: TrackingTracker[];
+  entries: TrackingEntry[];
+  onDaySelect: (date: string) => void;
+  embedded?: boolean;
+}) {
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const year = visibleMonth.getFullYear();
+  const month = visibleMonth.getMonth();
+  const firstDayOffset = (new Date(year, month, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [
+    ...Array.from({ length: firstDayOffset }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+  ];
+  const today = zurichDateKey(new Date());
+  const trackerById = new Map(
+    trackers.filter((tracker) => tracker.id).map((tracker) => [tracker.id, tracker]),
+  );
+  const entriesByDay = new Map<string, TrackingEntry[]>();
+  entries.forEach((entry) => {
+    if (!trackerById.has(entry.trackerId)) return;
+    const key = zurichDateKey(entry.startedAt);
+    entriesByDay.set(key, [...(entriesByDay.get(key) ?? []), entry]);
+  });
+
+  return (
+    <section
+      className={
+        embedded
+          ? "mt-6 border-t border-black/5 pt-6"
+          : "mb-5 rounded-[24px] border border-white/80 bg-white/72 p-5 shadow-nook backdrop-blur-2xl sm:p-6"
+      }
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-teal-100 text-teal-700">
+            <CalendarDays size={18} />
+          </span>
+          <div>
+            <h2 className="text-lg font-semibold tracking-[-0.025em]">
+              {title}
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-nook-muted">
+              {subtitle}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setVisibleMonth(new Date(year, month - 1, 1))}
+            className="grid h-9 w-9 place-items-center rounded-full bg-black/5"
+            aria-label="Vorheriger Monat"
+          >
+            <ChevronLeft size={17} />
+          </button>
+          <p className="min-w-28 text-center text-sm font-medium sm:min-w-32">
+            {new Intl.DateTimeFormat("de-CH", {
+              month: "long",
+              year: "numeric",
+            }).format(visibleMonth)}
+          </p>
+          <button
+            onClick={() => setVisibleMonth(new Date(year, month + 1, 1))}
+            className="grid h-9 w-9 place-items-center rounded-full bg-black/5"
+            aria-label="Nächster Monat"
+          >
+            <ChevronRight size={17} />
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-7 text-center text-[11px] text-nook-muted">
+        {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((day) => (
+          <span key={day} className="py-2">
+            {day}
+          </span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((day, index) => {
+          if (!day) return <span key={`empty-${index}`} />;
+          const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const dayEntries = entriesByDay.get(key) ?? [];
+          const dayTrackers = Array.from(
+            new Map(
+              dayEntries
+                .map((entry) => trackerById.get(entry.trackerId))
+                .filter((tracker): tracker is TrackingTracker => Boolean(tracker))
+                .map((tracker) => [tracker.id, tracker]),
+            ).values(),
+          );
+          return (
+            <button
+              key={key}
+              onClick={() => onDaySelect(key)}
+              className={[
+                "relative flex aspect-square min-h-10 flex-col items-center justify-center rounded-xl text-xs transition duration-300 hover:bg-white/90 sm:min-h-14",
+                dayEntries.length ? "bg-white/78 shadow-sm" : "bg-white/35",
+                key === today ? "ring-2 ring-nook-ink/45" : "",
+              ].join(" ")}
+              aria-label={`${day}. ${dayEntries.length} Einträge`}
+            >
+              <span>{day}</span>
+              {dayTrackers.length > 0 && (
+                <span className="absolute bottom-1.5 flex max-w-[80%] gap-1">
+                  {dayTrackers.slice(0, 4).map((tracker) => (
+                    <span
+                      key={tracker.id}
+                      className={`h-1.5 w-1.5 rounded-full ${dotClasses[tracker.color]}`}
+                    />
+                  ))}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {!embedded && (
+        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-black/5 pt-4 text-[11px] text-nook-muted">
+          {trackers.map((tracker) => (
+            <Legend
+              key={`${tracker.type}-${tracker.id}`}
+              color={dotClasses[tracker.color]}
+              label={tracker.name}
+              dot
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function CycleCalendar({

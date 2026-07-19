@@ -1300,6 +1300,57 @@ export async function POST(request: Request) {
       return NextResponse.json({ id: entry.id });
     }
 
+    if (action === "update-tracking-entry") {
+      const id = cleanText(body.id, 50);
+      const startedAt = cleanDateTime(body.startedAt);
+      const endedAt = cleanDateTime(body.endedAt);
+      const data = cleanTrackingData(body.data);
+      const notes = cleanText(body.notes, 10000);
+      if (!startedAt) {
+        return NextResponse.json(
+          { error: "Bitte gib einen gültigen Beginn an." },
+          { status: 400 },
+        );
+      }
+      if (endedAt && endedAt < startedAt) {
+        return NextResponse.json(
+          { error: "Das Ende kann nicht vor dem Beginn liegen." },
+          { status: 400 },
+        );
+      }
+
+      const [entry] = await db
+        .update(trackingEntries)
+        .set({ startedAt, endedAt, data, notes })
+        .where(
+          and(
+            eq(trackingEntries.id, id),
+            eq(trackingEntries.userId, user.id),
+          ),
+        )
+        .returning({
+          id: trackingEntries.id,
+          trackerId: trackingEntries.trackerId,
+          startedAt: trackingEntries.startedAt,
+          endedAt: trackingEntries.endedAt,
+          notes: trackingEntries.notes,
+        });
+      if (!entry) {
+        return NextResponse.json(
+          { error: "Eintrag nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({
+        entry: {
+          ...entry,
+          startedAt: entry.startedAt.toISOString(),
+          endedAt: entry.endedAt?.toISOString(),
+          data: JSON.parse(data),
+        },
+      });
+    }
+
     if (action === "create-routine") {
       const title = cleanText(body.title, 120);
       const requestedTarget =
