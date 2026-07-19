@@ -5,12 +5,24 @@ import { getDb } from "@/lib/db/client";
 import {
   areas,
   inboxItems,
+  knowledgeProjectBlocks,
+  knowledgeProjectPages,
+  knowledgeProjects,
   routineCompletions,
   routines,
   taskProjects,
   tasks,
 } from "@/lib/db/schema";
-import type { Area, InboxItem, Project, Routine, Task } from "@/lib/types";
+import type {
+  Area,
+  InboxItem,
+  KnowledgeProject,
+  KnowledgeProjectBlock,
+  KnowledgeProjectPage,
+  Project,
+  Routine,
+  Task,
+} from "@/lib/types";
 
 const TIME_ZONE = "Europe/Zurich";
 
@@ -41,6 +53,9 @@ function currentWeekBounds() {
 export type DashboardData = {
   areas: Area[];
   projects: Project[];
+  knowledgeProjects: KnowledgeProject[];
+  knowledgeProjectPages: KnowledgeProjectPage[];
+  knowledgeProjectBlocks: KnowledgeProjectBlock[];
   tasks: Task[];
   routines: Routine[];
   inboxItems: InboxItem[];
@@ -51,7 +66,16 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
   const today = localDate();
   const week = currentWeekBounds();
 
-  const [areaRows, projectRows, taskRows, inboxRows, routineRows] =
+  const [
+    areaRows,
+    projectRows,
+    knowledgeProjectRows,
+    knowledgeProjectPageRows,
+    knowledgeProjectBlockRows,
+    taskRows,
+    inboxRows,
+    routineRows,
+  ] =
     await Promise.all([
     db
       .select({ id: areas.id, name: areas.name })
@@ -70,6 +94,45 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
         .from(taskProjects)
         .where(eq(taskProjects.userId, userId))
         .orderBy(asc(taskProjects.createdAt)),
+      db
+        .select({
+          id: knowledgeProjects.id,
+          title: knowledgeProjects.title,
+          description: knowledgeProjects.description,
+          status: knowledgeProjects.status,
+        })
+        .from(knowledgeProjects)
+        .where(eq(knowledgeProjects.userId, userId))
+        .orderBy(desc(knowledgeProjects.updatedAt)),
+      db
+        .select({
+          id: knowledgeProjectPages.id,
+          projectId: knowledgeProjectPages.projectId,
+          title: knowledgeProjectPages.title,
+          content: knowledgeProjectPages.content,
+          position: knowledgeProjectPages.position,
+        })
+        .from(knowledgeProjectPages)
+        .where(eq(knowledgeProjectPages.userId, userId))
+        .orderBy(
+          asc(knowledgeProjectPages.position),
+          asc(knowledgeProjectPages.createdAt),
+        ),
+      db
+        .select({
+          id: knowledgeProjectBlocks.id,
+          pageId: knowledgeProjectBlocks.pageId,
+          type: knowledgeProjectBlocks.type,
+          title: knowledgeProjectBlocks.title,
+          content: knowledgeProjectBlocks.content,
+          position: knowledgeProjectBlocks.position,
+        })
+        .from(knowledgeProjectBlocks)
+        .where(eq(knowledgeProjectBlocks.userId, userId))
+        .orderBy(
+          asc(knowledgeProjectBlocks.position),
+          asc(knowledgeProjectBlocks.createdAt),
+        ),
       db
         .select({
           id: tasks.id,
@@ -124,6 +187,19 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
       ...project,
       endDate: project.endDate ?? undefined,
     })),
+    knowledgeProjects: knowledgeProjectRows.map((project) => ({
+      ...project,
+      status: ["active", "paused", "complete"].includes(project.status)
+        ? (project.status as KnowledgeProject["status"])
+        : "idea",
+    })),
+    knowledgeProjectPages: knowledgeProjectPageRows,
+    knowledgeProjectBlocks: knowledgeProjectBlockRows
+      .filter((block) => ["checklist", "link", "table"].includes(block.type))
+      .map((block) => ({
+        ...block,
+        type: block.type as KnowledgeProjectBlock["type"],
+      })),
     tasks: taskRows.map((task) => ({
       id: task.id,
       title: task.title,

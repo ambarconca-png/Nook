@@ -12,6 +12,30 @@ export type Project = {
   notes: string;
 };
 
+export type KnowledgeProject = {
+  id: string;
+  title: string;
+  description: string;
+  status: "idea" | "active" | "paused" | "complete";
+};
+
+export type KnowledgeProjectPage = {
+  id: string;
+  projectId: string;
+  title: string;
+  content: string;
+  position: number;
+};
+
+export type KnowledgeProjectBlock = {
+  id: string;
+  pageId: string;
+  type: "checklist" | "link" | "table";
+  title: string;
+  content: string;
+  position: number;
+};
+
 export type Task = {
   id: string;
   title: string;

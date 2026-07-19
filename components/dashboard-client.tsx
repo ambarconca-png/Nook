@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from "react";
 import {
+  ArrowLeft,
   Bell,
   CheckCircle2,
   ChevronDown,
   ClipboardCheck,
   FolderKanban,
+  FileText,
   HeartPulse,
   Home,
   Inbox,
@@ -18,6 +20,7 @@ import {
   Search,
   Settings,
   Sun,
+  Trash2,
   X,
 } from "lucide-react";
 import { SmokeBackground } from "@/components/smoke-background";
@@ -25,8 +28,18 @@ import { NookCard } from "@/components/nook-card";
 import { TaskRow } from "@/components/task-row";
 import { RoutineRow } from "@/components/routine-row";
 import { InboxItemRow } from "@/components/inbox-item-row";
+import { KnowledgeProjectBlockCard } from "@/components/knowledge-project-block";
 import type { DashboardData } from "@/lib/dashboard";
-import type { Area, InboxItem, Project, Routine, Task } from "@/lib/types";
+import type {
+  Area,
+  InboxItem,
+  KnowledgeProject,
+  KnowledgeProjectBlock,
+  KnowledgeProjectPage,
+  Project,
+  Routine,
+  Task,
+} from "@/lib/types";
 
 type PageId = "today" | "inbox" | "todos" | "routines" | "tracking" | "projects";
 
@@ -38,6 +51,16 @@ const navigation = [
   { id: "tracking" as PageId, label: "Tracking", icon: HeartPulse },
   { id: "projects" as PageId, label: "Projekte", icon: FolderKanban },
 ];
+
+const knowledgeProjectStatusLabels: Record<
+  KnowledgeProject["status"],
+  string
+> = {
+  idea: "Idee",
+  active: "In Arbeit",
+  paused: "Pausiert",
+  complete: "Abgeschlossen",
+};
 
 function getGreeting(hour: number) {
   if (hour < 12) return "Guten Morgen";
@@ -81,6 +104,31 @@ export function DashboardClient({
 
   const [areas, setAreas] = useState(initialData.areas);
   const [projects, setProjects] = useState(initialData.projects);
+  const [knowledgeProjects, setKnowledgeProjects] = useState(
+    initialData.knowledgeProjects,
+  );
+  const [knowledgeProjectPages, setKnowledgeProjectPages] = useState(
+    initialData.knowledgeProjectPages,
+  );
+  const [knowledgeProjectBlocks, setKnowledgeProjectBlocks] = useState(
+    initialData.knowledgeProjectBlocks,
+  );
+  const [activeKnowledgeProjectId, setActiveKnowledgeProjectId] = useState("");
+  const [activeKnowledgePageId, setActiveKnowledgePageId] = useState("");
+  const [knowledgeProjectEditorOpen, setKnowledgeProjectEditorOpen] =
+    useState(false);
+  const [editingKnowledgeProjectId, setEditingKnowledgeProjectId] =
+    useState("");
+  const [knowledgeProjectTitle, setKnowledgeProjectTitle] = useState("");
+  const [knowledgeProjectDescription, setKnowledgeProjectDescription] =
+    useState("");
+  const [knowledgeProjectStatus, setKnowledgeProjectStatus] =
+    useState<KnowledgeProject["status"]>("idea");
+  const [knowledgeProjectSaving, setKnowledgeProjectSaving] = useState(false);
+  const [knowledgeProjectError, setKnowledgeProjectError] = useState("");
+  const [knowledgePageTitle, setKnowledgePageTitle] = useState("");
+  const [knowledgePageContent, setKnowledgePageContent] = useState("");
+  const [knowledgePageSaving, setKnowledgePageSaving] = useState(false);
   const [tasks, setTasks] = useState(initialData.tasks);
   const [routines, setRoutines] = useState(initialData.routines);
   const [inboxItems, setInboxItems] = useState(initialData.inboxItems);
@@ -88,6 +136,12 @@ export function DashboardClient({
   const todayTasks = useMemo(
     () => tasks.filter((task) => task.dueToday),
     [tasks],
+  );
+  const activeKnowledgeProject = knowledgeProjects.find(
+    (project) => project.id === activeKnowledgeProjectId,
+  );
+  const activeKnowledgePage = knowledgeProjectPages.find(
+    (projectPage) => projectPage.id === activeKnowledgePageId,
   );
 
   async function dashboardAction<T>(body: Record<string, unknown>) {
@@ -422,6 +476,252 @@ export function DashboardClient({
     } finally {
       setEditProjectSaving(false);
     }
+  }
+
+  function openKnowledgeProjectEditor(project?: KnowledgeProject) {
+    setEditingKnowledgeProjectId(project?.id ?? "");
+    setKnowledgeProjectTitle(project?.title ?? "");
+    setKnowledgeProjectDescription(project?.description ?? "");
+    setKnowledgeProjectStatus(project?.status ?? "idea");
+    setKnowledgeProjectError("");
+    setKnowledgeProjectEditorOpen(true);
+  }
+
+  function openKnowledgeProject(project: KnowledgeProject) {
+    const firstPage = knowledgeProjectPages.find(
+      (page) => page.projectId === project.id,
+    );
+    setActiveKnowledgeProjectId(project.id);
+    setActiveKnowledgePageId(firstPage?.id ?? "");
+    setKnowledgePageTitle(firstPage?.title ?? "");
+    setKnowledgePageContent(firstPage?.content ?? "");
+  }
+
+  function selectKnowledgePage(page: KnowledgeProjectPage) {
+    setActiveKnowledgePageId(page.id);
+    setKnowledgePageTitle(page.title);
+    setKnowledgePageContent(page.content);
+  }
+
+  async function saveKnowledgeProject() {
+    if (!knowledgeProjectTitle.trim()) {
+      setKnowledgeProjectError("Bitte gib dem Projekt einen Titel.");
+      return;
+    }
+
+    setKnowledgeProjectSaving(true);
+    setKnowledgeProjectError("");
+    try {
+      if (editingKnowledgeProjectId) {
+        const result = await dashboardAction<{ project: KnowledgeProject }>({
+          action: "update-knowledge-project",
+          id: editingKnowledgeProjectId,
+          title: knowledgeProjectTitle,
+          description: knowledgeProjectDescription,
+          status: knowledgeProjectStatus,
+        });
+        setKnowledgeProjects((current) =>
+          current.map((project) =>
+            project.id === result.project.id ? result.project : project,
+          ),
+        );
+      } else {
+        const result = await dashboardAction<{
+          project: KnowledgeProject;
+          page: KnowledgeProjectPage;
+        }>({
+          action: "create-knowledge-project",
+          title: knowledgeProjectTitle,
+          description: knowledgeProjectDescription,
+          status: knowledgeProjectStatus,
+        });
+        setKnowledgeProjects((current) => [result.project, ...current]);
+        setKnowledgeProjectPages((current) => [...current, result.page]);
+        setActiveKnowledgeProjectId(result.project.id);
+        selectKnowledgePage(result.page);
+      }
+      setKnowledgeProjectEditorOpen(false);
+    } catch (error) {
+      setKnowledgeProjectError(
+        error instanceof Error
+          ? error.message
+          : "Projekt konnte nicht gespeichert werden.",
+      );
+    } finally {
+      setKnowledgeProjectSaving(false);
+    }
+  }
+
+  async function deleteKnowledgeProject(project: KnowledgeProject) {
+    if (
+      !window.confirm(
+        `Möchtest du „${project.title}“ mit allen Notizseiten wirklich löschen?`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await dashboardAction({
+        action: "delete-knowledge-project",
+        id: project.id,
+      });
+      setKnowledgeProjects((current) =>
+        current.filter((item) => item.id !== project.id),
+      );
+      setKnowledgeProjectPages((current) =>
+        current.filter((page) => page.projectId !== project.id),
+      );
+      const projectPageIds = new Set(
+        knowledgeProjectPages
+          .filter((page) => page.projectId === project.id)
+          .map((page) => page.id),
+      );
+      setKnowledgeProjectBlocks((current) =>
+        current.filter((block) => !projectPageIds.has(block.pageId)),
+      );
+      setActiveKnowledgeProjectId("");
+      setActiveKnowledgePageId("");
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Projekt konnte nicht gelöscht werden.",
+      );
+    }
+  }
+
+  async function addKnowledgePage(projectId: string) {
+    const title = window.prompt("Wie heißt die neue Notizseite?");
+    if (!title?.trim()) return;
+    try {
+      const result = await dashboardAction<{ page: KnowledgeProjectPage }>({
+        action: "create-knowledge-project-page",
+        projectId,
+        title,
+      });
+      setKnowledgeProjectPages((current) => [...current, result.page]);
+      selectKnowledgePage(result.page);
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Notizseite konnte nicht erstellt werden.",
+      );
+    }
+  }
+
+  async function saveKnowledgePage() {
+    if (!activeKnowledgePage || !knowledgePageTitle.trim()) return;
+    setKnowledgePageSaving(true);
+    try {
+      const result = await dashboardAction<{ page: KnowledgeProjectPage }>({
+        action: "update-knowledge-project-page",
+        id: activeKnowledgePage.id,
+        title: knowledgePageTitle,
+        content: knowledgePageContent,
+      });
+      setKnowledgeProjectPages((current) =>
+        current.map((page) =>
+          page.id === result.page.id ? result.page : page,
+        ),
+      );
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Notizseite konnte nicht gespeichert werden.",
+      );
+    } finally {
+      setKnowledgePageSaving(false);
+    }
+  }
+
+  async function deleteKnowledgePage(page: KnowledgeProjectPage) {
+    if (!window.confirm(`Möchtest du die Seite „${page.title}“ löschen?`)) {
+      return;
+    }
+    try {
+      await dashboardAction({
+        action: "delete-knowledge-project-page",
+        id: page.id,
+      });
+      const remainingPages = knowledgeProjectPages.filter(
+        (item) => item.id !== page.id && item.projectId === page.projectId,
+      );
+      setKnowledgeProjectPages((current) =>
+        current.filter((item) => item.id !== page.id),
+      );
+      setKnowledgeProjectBlocks((current) =>
+        current.filter((block) => block.pageId !== page.id),
+      );
+      if (activeKnowledgePageId === page.id) {
+        const nextPage = remainingPages[0];
+        setActiveKnowledgePageId(nextPage?.id ?? "");
+        setKnowledgePageTitle(nextPage?.title ?? "");
+        setKnowledgePageContent(nextPage?.content ?? "");
+      }
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Notizseite konnte nicht gelöscht werden.",
+      );
+    }
+  }
+
+  async function addKnowledgeProjectBlock(
+    pageId: string,
+    type: KnowledgeProjectBlock["type"],
+  ) {
+    try {
+      const result = await dashboardAction<{
+        block: KnowledgeProjectBlock;
+      }>({
+        action: "create-knowledge-project-block",
+        pageId,
+        type,
+      });
+      setKnowledgeProjectBlocks((current) => [...current, result.block]);
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Inhalt konnte nicht hinzugefügt werden.",
+      );
+    }
+  }
+
+  async function updateKnowledgeProjectBlock(
+    block: KnowledgeProjectBlock,
+  ) {
+    const result = await dashboardAction<{
+      block: KnowledgeProjectBlock;
+    }>({
+      action: "update-knowledge-project-block",
+      id: block.id,
+      title: block.title,
+      content: block.content,
+    });
+    setKnowledgeProjectBlocks((current) =>
+      current.map((item) =>
+        item.id === result.block.id ? result.block : item,
+      ),
+    );
+  }
+
+  async function deleteKnowledgeProjectBlock(
+    block: KnowledgeProjectBlock,
+  ) {
+    if (!window.confirm(`Möchtest du „${block.title}“ wirklich löschen?`)) {
+      return;
+    }
+    await dashboardAction({
+      action: "delete-knowledge-project-block",
+      id: block.id,
+    });
+    setKnowledgeProjectBlocks((current) =>
+      current.filter((item) => item.id !== block.id),
+    );
   }
 
   async function logout() {
@@ -945,89 +1245,278 @@ export function DashboardClient({
         {page === "projects" && (
           <PageHeading
             title="Projekte"
-            subtitle="Ziele, Gedanken und die nächsten Schritte."
+            subtitle={
+              activeKnowledgeProject
+                ? "Ein Ort, an dem eine Idee wachsen darf."
+                : "Ideen, erste Gedanken und Wissen im Werden."
+            }
             buttonLabel="Projekt"
-            onButton={() => {
-              if (areas[0]) addProject(areas[0].id);
-              else addArea();
-            }}
+            onButton={() => openKnowledgeProjectEditor()}
           >
-            <div className="grid gap-5 md:grid-cols-2">
-              {projects.map((project) => {
-                const projectTasks = tasks.filter(
-                  (task) => task.projectId === project.id,
-                );
-                return (
-                  <NookCard
-                    key={project.id}
-                    title={project.title}
-                    subtitle={
-                      project.endDate
-                        ? `Enddatum ${new Intl.DateTimeFormat("de-CH").format(new Date(`${project.endDate}T12:00:00`))}`
-                        : "Ohne Enddatum"
-                    }
-                    action={
+            {!activeKnowledgeProject ? (
+              <div className="grid gap-5 md:grid-cols-2">
+                {knowledgeProjects.map((project) => {
+                  const pageCount = knowledgeProjectPages.filter(
+                    (projectPage) => projectPage.projectId === project.id,
+                  ).length;
+                  return (
+                    <button
+                      key={project.id}
+                      onClick={() => openKnowledgeProject(project)}
+                      className="group rounded-[24px] border border-white/80 bg-white/72 p-6 text-left shadow-nook backdrop-blur-2xl transition duration-500 hover:-translate-y-0.5 hover:bg-white/80"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="grid h-10 w-10 place-items-center rounded-2xl bg-nook-violet/10 text-nook-violet">
+                          <FolderKanban size={19} strokeWidth={1.7} />
+                        </div>
+                        <span className="rounded-full bg-black/5 px-3 py-1 text-xs text-nook-muted">
+                          {knowledgeProjectStatusLabels[project.status]}
+                        </span>
+                      </div>
+                      <h2 className="mt-7 text-xl font-semibold tracking-[-0.03em]">
+                        {project.title}
+                      </h2>
+                      <p className="mt-2 min-h-12 text-sm leading-6 text-nook-muted">
+                        {project.description ||
+                          "Noch ganz offen – hier darf die Idee erst einmal ankommen."}
+                      </p>
+                      <p className="mt-5 text-xs text-nook-muted">
+                        {pageCount === 1
+                          ? "1 Notizseite"
+                          : `${pageCount} Notizseiten`}
+                      </p>
+                    </button>
+                  );
+                })}
+                {knowledgeProjects.length === 0 && (
+                  <NookCard title="Platz für deine Ideen">
+                    <div className="max-w-xl py-6">
+                      <p className="leading-7 text-nook-muted">
+                        Ein Projekt muss noch keinen festen Plan haben. Sammle
+                        erste Gedanken und lasse daraus in Ruhe etwas entstehen.
+                      </p>
                       <button
-                        onClick={() => openProjectEditor(project)}
-                        className="flex items-center gap-2 text-sm text-nook-violet"
+                        onClick={() => openKnowledgeProjectEditor()}
+                        className="mt-5 rounded-2xl bg-nook-violet/10 px-4 py-2.5 text-sm text-nook-violet"
                       >
-                        <Pencil size={14} />
-                        Bearbeiten
+                        + Erstes Projekt anlegen
                       </button>
-                    }
-                  >
-                    {project.description && (
-                      <p className="pb-4 text-sm leading-6 text-nook-muted">
-                        {project.description}
-                      </p>
-                    )}
-                    <div className="border-t border-black/5 pt-3">
-                      <p className="mb-1 text-xs font-medium uppercase tracking-[0.16em] text-nook-muted">
-                        Zugehörige To-dos
-                      </p>
-                      <div className="divide-y divide-black/5">
-                        {projectTasks.map((task) => (
-                          <TaskRow
-                            key={task.id}
-                            task={task}
-                            area={areas.find(
-                              (area) => area.id === task.areaId,
-                            )}
-                            project={project}
-                            onToggle={() => toggleTask(task.id)}
-                            onEdit={() => openTaskEditor(task)}
-                            onDelete={() => deleteTask(task)}
-                          />
-                        ))}
-                        {projectTasks.length === 0 && (
-                          <p className="py-4 text-sm text-nook-muted">
-                            Noch keine To-dos in diesem Projekt.
-                          </p>
-                        )}
-                      </div>
                     </div>
-                    {project.notes && (
-                      <div className="mt-3 rounded-[18px] bg-white/55 px-4 py-3">
-                        <p className="text-xs font-medium uppercase tracking-[0.14em] text-nook-muted">
-                          Notizen
+                  </NookCard>
+                )}
+              </div>
+            ) : (
+              <div>
+                <button
+                  onClick={() => {
+                    setActiveKnowledgeProjectId("");
+                    setActiveKnowledgePageId("");
+                  }}
+                  className="mb-5 flex items-center gap-2 text-sm text-nook-muted transition hover:text-nook-ink"
+                >
+                  <ArrowLeft size={16} />
+                  Alle Projekte
+                </button>
+
+                <section className="mb-5 rounded-[24px] border border-white/80 bg-white/72 p-6 shadow-nook backdrop-blur-2xl">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <span className="rounded-full bg-nook-violet/10 px-3 py-1 text-xs text-nook-violet">
+                        {
+                          knowledgeProjectStatusLabels[
+                            activeKnowledgeProject.status
+                          ]
+                        }
+                      </span>
+                      <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em]">
+                        {activeKnowledgeProject.title}
+                      </h2>
+                      {activeKnowledgeProject.description && (
+                        <p className="mt-3 max-w-3xl leading-7 text-nook-muted">
+                          {activeKnowledgeProject.description}
                         </p>
-                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
-                          {project.notes}
+                      )}
+                    </div>
+                    <button
+                      onClick={() =>
+                        openKnowledgeProjectEditor(activeKnowledgeProject)
+                      }
+                      className="flex items-center gap-2 rounded-2xl bg-black/5 px-4 py-2.5 text-sm"
+                    >
+                      <Pencil size={15} />
+                      Bearbeiten
+                    </button>
+                  </div>
+                </section>
+
+                <div className="grid items-start gap-5 lg:grid-cols-[240px_1fr]">
+                  <aside className="rounded-[24px] border border-white/80 bg-white/72 p-3 shadow-nook backdrop-blur-2xl">
+                    <div className="mb-2 flex items-center justify-between px-2 py-2">
+                      <p className="text-xs font-medium uppercase tracking-[0.16em] text-nook-muted">
+                        Notizseiten
+                      </p>
+                      <button
+                        onClick={() =>
+                          addKnowledgePage(activeKnowledgeProject.id)
+                        }
+                        className="grid h-8 w-8 place-items-center rounded-full bg-nook-violet/10 text-nook-violet"
+                        aria-label="Notizseite hinzufügen"
+                      >
+                        <Plus size={15} />
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      {knowledgeProjectPages
+                        .filter(
+                          (projectPage) =>
+                            projectPage.projectId ===
+                            activeKnowledgeProject.id,
+                        )
+                        .map((projectPage) => (
+                          <button
+                            key={projectPage.id}
+                            onClick={() => selectKnowledgePage(projectPage)}
+                            className={[
+                              "flex w-full items-center gap-2 rounded-2xl px-3 py-3 text-left text-sm transition",
+                              activeKnowledgePageId === projectPage.id
+                                ? "bg-nook-violet/10 text-nook-violet"
+                                : "hover:bg-black/[0.035]",
+                            ].join(" ")}
+                          >
+                            <FileText size={15} strokeWidth={1.7} />
+                            <span className="truncate">{projectPage.title}</span>
+                          </button>
+                        ))}
+                    </div>
+                  </aside>
+
+                  <section className="rounded-[24px] border border-white/80 bg-white/72 p-5 shadow-nook backdrop-blur-2xl sm:p-6">
+                    {activeKnowledgePage ? (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <input
+                            value={knowledgePageTitle}
+                            onChange={(event) =>
+                              setKnowledgePageTitle(event.target.value)
+                            }
+                            className="min-w-0 flex-1 bg-transparent text-2xl font-semibold tracking-[-0.03em] outline-none"
+                            aria-label="Seitentitel"
+                          />
+                          <button
+                            onClick={() =>
+                              deleteKnowledgePage(activeKnowledgePage)
+                            }
+                            className="grid h-9 w-9 place-items-center rounded-full text-nook-muted transition hover:bg-rose-50 hover:text-rose-700"
+                            aria-label="Notizseite löschen"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        <textarea
+                          value={knowledgePageContent}
+                          onChange={(event) =>
+                            setKnowledgePageContent(event.target.value)
+                          }
+                          className="mt-5 min-h-[360px] w-full resize-y bg-transparent text-[15px] leading-7 outline-none"
+                          placeholder="Schreib einfach los …"
+                        />
+                        <div className="mt-4 flex justify-end">
+                          <button
+                            onClick={saveKnowledgePage}
+                            disabled={knowledgePageSaving}
+                            className="rounded-2xl bg-nook-violet px-4 py-2.5 text-sm text-white disabled:cursor-wait disabled:opacity-60"
+                          >
+                            {knowledgePageSaving
+                              ? "Speichert …"
+                              : "Seite speichern"}
+                          </button>
+                        </div>
+
+                        <div className="my-6 border-t border-black/[0.06]" />
+
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <h3 className="font-medium">Weitere Inhalte</h3>
+                            <p className="mt-1 text-xs text-nook-muted">
+                              Strukturiere nur, was davon profitiert.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() =>
+                                addKnowledgeProjectBlock(
+                                  activeKnowledgePage.id,
+                                  "checklist",
+                                )
+                              }
+                              className="rounded-2xl bg-nook-violet/10 px-3 py-2 text-xs text-nook-violet"
+                            >
+                              + Checkliste
+                            </button>
+                            <button
+                              onClick={() =>
+                                addKnowledgeProjectBlock(
+                                  activeKnowledgePage.id,
+                                  "link",
+                                )
+                              }
+                              className="rounded-2xl bg-nook-violet/10 px-3 py-2 text-xs text-nook-violet"
+                            >
+                              + Link
+                            </button>
+                            <button
+                              onClick={() =>
+                                addKnowledgeProjectBlock(
+                                  activeKnowledgePage.id,
+                                  "table",
+                                )
+                              }
+                              className="rounded-2xl bg-nook-violet/10 px-3 py-2 text-xs text-nook-violet"
+                            >
+                              + Tabelle
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          {knowledgeProjectBlocks
+                            .filter(
+                              (block) =>
+                                block.pageId === activeKnowledgePage.id,
+                            )
+                            .map((block) => (
+                              <KnowledgeProjectBlockCard
+                                key={block.id}
+                                block={block}
+                                onUpdate={updateKnowledgeProjectBlock}
+                                onDelete={deleteKnowledgeProjectBlock}
+                              />
+                            ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="py-20 text-center">
+                        <FileText
+                          size={24}
+                          className="mx-auto text-nook-violet/65"
+                        />
+                        <p className="mt-4 font-medium">
+                          Noch keine Notizseite.
                         </p>
+                        <button
+                          onClick={() =>
+                            addKnowledgePage(activeKnowledgeProject.id)
+                          }
+                          className="mt-4 text-sm text-nook-violet"
+                        >
+                          + Seite hinzufügen
+                        </button>
                       </div>
                     )}
-                  </NookCard>
-                );
-              })}
-              {projects.length === 0 && (
-                <NookCard title="Dein erstes Projekt">
-                  <p className="max-w-xl py-6 leading-7 text-nook-muted">
-                    Bündle ein Ziel mit Beschreibung, Enddatum, Notizen und
-                    den Aufgaben, die dich dorthin führen.
-                  </p>
-                </NookCard>
-              )}
-            </div>
+                  </section>
+                </div>
+              </div>
+            )}
           </PageHeading>
         )}
       </main>
@@ -1114,6 +1603,119 @@ export function DashboardClient({
               >
                 {captureSaving ? "Speichert …" : "Speichern"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {knowledgeProjectEditorOpen && (
+        <div
+          className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-black/25 p-4 backdrop-blur-md"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) {
+              setKnowledgeProjectEditorOpen(false);
+            }
+          }}
+        >
+          <div className="my-4 w-full max-w-xl rounded-[28px] bg-nook-card p-6 shadow-nook">
+            <div className="mb-5 flex items-start justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-[-0.03em]">
+                  {editingKnowledgeProjectId
+                    ? "Projekt bearbeiten"
+                    : "Neues Projekt"}
+                </h2>
+                <p className="mt-1 text-sm text-nook-muted">
+                  Eine Idee darf hier erst einmal offen bleiben.
+                </p>
+              </div>
+              <button
+                onClick={() => setKnowledgeProjectEditorOpen(false)}
+                className="grid h-9 w-9 place-items-center rounded-full bg-black/5"
+                aria-label="Schließen"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <label className="block text-sm font-medium">
+              Titel
+              <input
+                autoFocus
+                value={knowledgeProjectTitle}
+                onChange={(event) =>
+                  setKnowledgeProjectTitle(event.target.value)
+                }
+                className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-violet focus:ring-4 focus:ring-nook-violet/10"
+                placeholder="Zum Beispiel: Idee für ein Kochbuch"
+              />
+            </label>
+
+            <label className="mt-4 block text-sm font-medium">
+              Beschreibung
+              <textarea
+                value={knowledgeProjectDescription}
+                onChange={(event) =>
+                  setKnowledgeProjectDescription(event.target.value)
+                }
+                className="mt-2 min-h-28 w-full resize-y rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-violet focus:ring-4 focus:ring-nook-violet/10"
+                placeholder="Worum könnte es gehen?"
+              />
+            </label>
+
+            <label className="mt-4 block text-sm font-medium">
+              Status
+              <select
+                value={knowledgeProjectStatus}
+                onChange={(event) =>
+                  setKnowledgeProjectStatus(
+                    event.target.value as KnowledgeProject["status"],
+                  )
+                }
+                className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-violet"
+              >
+                <option value="idea">Idee</option>
+                <option value="active">In Arbeit</option>
+                <option value="paused">Pausiert</option>
+                <option value="complete">Abgeschlossen</option>
+              </select>
+            </label>
+
+            {knowledgeProjectError && (
+              <p className="mt-3 text-sm text-rose-700">
+                {knowledgeProjectError}
+              </p>
+            )}
+
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+              {editingKnowledgeProjectId && activeKnowledgeProject ? (
+                <button
+                  onClick={() => {
+                    setKnowledgeProjectEditorOpen(false);
+                    deleteKnowledgeProject(activeKnowledgeProject);
+                  }}
+                  className="rounded-2xl px-3 py-2.5 text-sm text-rose-700 transition hover:bg-rose-50"
+                >
+                  Projekt löschen
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setKnowledgeProjectEditorOpen(false)}
+                  className="rounded-2xl bg-black/5 px-4 py-2.5 text-sm"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={saveKnowledgeProject}
+                  disabled={knowledgeProjectSaving}
+                  className="rounded-2xl bg-nook-violet px-4 py-2.5 text-sm text-white disabled:cursor-wait disabled:opacity-60"
+                >
+                  {knowledgeProjectSaving ? "Speichert …" : "Speichern"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

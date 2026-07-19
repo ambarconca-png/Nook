@@ -1,0 +1,303 @@
+"use client";
+
+import { useState } from "react";
+import { Link2, ListChecks, Plus, Table2, Trash2 } from "lucide-react";
+import type { KnowledgeProjectBlock } from "@/lib/types";
+
+type ChecklistContent = {
+  items: { text: string; done: boolean }[];
+};
+
+type LinkContent = {
+  url: string;
+  description: string;
+};
+
+type TableContent = {
+  columns: string[];
+  rows: string[][];
+};
+
+function parseContent<T>(content: string, fallback: T): T {
+  try {
+    return { ...fallback, ...JSON.parse(content) } as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export function KnowledgeProjectBlockCard({
+  block,
+  onUpdate,
+  onDelete,
+}: {
+  block: KnowledgeProjectBlock;
+  onUpdate: (block: KnowledgeProjectBlock) => Promise<void>;
+  onDelete: (block: KnowledgeProjectBlock) => Promise<void>;
+}) {
+  const [title, setTitle] = useState(block.title);
+  const [saving, setSaving] = useState(false);
+  const [checklist, setChecklist] = useState<ChecklistContent>(() =>
+    parseContent(block.content, { items: [] }),
+  );
+  const [link, setLink] = useState<LinkContent>(() =>
+    parseContent(block.content, { url: "", description: "" }),
+  );
+  const [table, setTable] = useState<TableContent>(() =>
+    parseContent(block.content, {
+      columns: ["Spalte 1", "Spalte 2"],
+      rows: [["", ""]],
+    }),
+  );
+
+  const Icon =
+    block.type === "checklist"
+      ? ListChecks
+      : block.type === "link"
+        ? Link2
+        : Table2;
+
+  async function save(nextContent?: ChecklistContent | LinkContent | TableContent) {
+    setSaving(true);
+    try {
+      const content =
+        nextContent ??
+        (block.type === "checklist"
+          ? checklist
+          : block.type === "link"
+            ? link
+            : table);
+      await onUpdate({ ...block, title, content: JSON.stringify(content) });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="rounded-[22px] border border-black/[0.06] bg-white/58 p-4 sm:p-5">
+      <div className="flex items-center gap-3">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-nook-violet/10 text-nook-violet">
+          <Icon size={17} strokeWidth={1.7} />
+        </div>
+        <input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          className="min-w-0 flex-1 bg-transparent font-medium outline-none"
+          aria-label="Blocktitel"
+        />
+        <button
+          onClick={() => onDelete(block)}
+          className="grid h-8 w-8 place-items-center rounded-full text-nook-muted transition hover:bg-rose-50 hover:text-rose-700"
+          aria-label="Inhaltsblock löschen"
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
+
+      {block.type === "checklist" && (
+        <div className="mt-4 space-y-2">
+          {checklist.items.map((item, index) => (
+            <div key={index} className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={item.done}
+                onChange={(event) => {
+                  const items = checklist.items.map((current, itemIndex) =>
+                    itemIndex === index
+                      ? { ...current, done: event.target.checked }
+                      : current,
+                  );
+                  const next = { items };
+                  setChecklist(next);
+                  void save(next);
+                }}
+                className="h-4 w-4 shrink-0 accent-nook-violet"
+              />
+              <input
+                value={item.text}
+                onChange={(event) =>
+                  setChecklist((current) => ({
+                    items: current.items.map((currentItem, itemIndex) =>
+                      itemIndex === index
+                        ? { ...currentItem, text: event.target.value }
+                        : currentItem,
+                    ),
+                  }))
+                }
+                className={[
+                  "min-w-0 flex-1 border-b border-black/[0.06] bg-transparent py-2 text-sm outline-none focus:border-nook-violet/40",
+                  item.done ? "text-nook-muted line-through" : "",
+                ].join(" ")}
+                placeholder="Punkt hinzufügen …"
+              />
+              <button
+                onClick={() =>
+                  setChecklist((current) => ({
+                    items: current.items.filter(
+                      (_, itemIndex) => itemIndex !== index,
+                    ),
+                  }))
+                }
+                className="text-nook-muted hover:text-rose-700"
+                aria-label="Checklistenpunkt entfernen"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() =>
+              setChecklist((current) => ({
+                items: [...current.items, { text: "", done: false }],
+              }))
+            }
+            className="mt-2 flex items-center gap-2 text-sm text-nook-violet"
+          >
+            <Plus size={14} />
+            Punkt hinzufügen
+          </button>
+        </div>
+      )}
+
+      {block.type === "link" && (
+        <div className="mt-4 space-y-3">
+          <input
+            type="url"
+            value={link.url}
+            onChange={(event) =>
+              setLink((current) => ({ ...current, url: event.target.value }))
+            }
+            className="w-full rounded-[16px] border border-black/10 bg-white/75 px-4 py-3 text-sm outline-none focus:border-nook-violet"
+            placeholder="https://…"
+          />
+          <textarea
+            value={link.description}
+            onChange={(event) =>
+              setLink((current) => ({
+                ...current,
+                description: event.target.value,
+              }))
+            }
+            className="min-h-20 w-full resize-y rounded-[16px] border border-black/10 bg-white/75 px-4 py-3 text-sm outline-none focus:border-nook-violet"
+            placeholder="Warum ist dieser Link wichtig?"
+          />
+          {/^https?:\/\//i.test(link.url) && (
+            <a
+              href={link.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 text-sm text-nook-violet"
+            >
+              <Link2 size={14} />
+              Link öffnen
+            </a>
+          )}
+        </div>
+      )}
+
+      {block.type === "table" && (
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full border-separate border-spacing-0 text-sm">
+            <thead>
+              <tr>
+                {table.columns.map((column, columnIndex) => (
+                  <th
+                    key={columnIndex}
+                    className="min-w-32 border-b border-black/10 p-2 text-left"
+                  >
+                    <input
+                      value={column}
+                      onChange={(event) =>
+                        setTable((current) => ({
+                          ...current,
+                          columns: current.columns.map(
+                            (currentColumn, index) =>
+                              index === columnIndex
+                                ? event.target.value
+                                : currentColumn,
+                          ),
+                        }))
+                      }
+                      className="w-full bg-transparent font-medium outline-none"
+                    />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {table.rows.map((row, rowIndex) => (
+                <tr key={rowIndex}>
+                  {table.columns.map((_, columnIndex) => (
+                    <td
+                      key={columnIndex}
+                      className="border-b border-black/[0.05] p-2"
+                    >
+                      <input
+                        value={row[columnIndex] ?? ""}
+                        onChange={(event) =>
+                          setTable((current) => ({
+                            ...current,
+                            rows: current.rows.map((currentRow, index) =>
+                              index === rowIndex
+                                ? current.columns.map((_, cellIndex) =>
+                                    cellIndex === columnIndex
+                                      ? event.target.value
+                                      : (currentRow[cellIndex] ?? ""),
+                                  )
+                                : currentRow,
+                            ),
+                          }))
+                        }
+                        className="w-full bg-transparent outline-none"
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="mt-3 flex flex-wrap gap-4">
+            <button
+              onClick={() =>
+                setTable((current) => ({
+                  ...current,
+                  rows: [
+                    ...current.rows,
+                    current.columns.map(() => ""),
+                  ],
+                }))
+              }
+              className="text-sm text-nook-violet"
+            >
+              + Zeile
+            </button>
+            <button
+              onClick={() =>
+                setTable((current) => ({
+                  columns: [
+                    ...current.columns,
+                    `Spalte ${current.columns.length + 1}`,
+                  ],
+                  rows: current.rows.map((row) => [...row, ""]),
+                }))
+              }
+              className="text-sm text-nook-violet"
+            >
+              + Spalte
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4 flex justify-end">
+        <button
+          onClick={() => save()}
+          disabled={saving}
+          className="rounded-2xl bg-nook-violet/10 px-4 py-2 text-sm text-nook-violet disabled:cursor-wait disabled:opacity-60"
+        >
+          {saving ? "Speichert …" : "Block speichern"}
+        </button>
+      </div>
+    </section>
+  );
+}

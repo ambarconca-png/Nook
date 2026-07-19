@@ -5,6 +5,9 @@ import { getDb } from "@/lib/db/client";
 import {
   areas,
   inboxItems,
+  knowledgeProjectBlocks,
+  knowledgeProjectPages,
+  knowledgeProjects,
   routineCompletions,
   routines,
   taskProjects,
@@ -33,6 +36,29 @@ function cleanRecurrence(value: unknown) {
   return ["daily", "weekly", "monthly"].includes(recurrence)
     ? recurrence
     : "none";
+}
+
+function cleanProjectStatus(value: unknown) {
+  const status = cleanText(value, 12);
+  return ["idea", "active", "paused", "complete"].includes(status)
+    ? status
+    : "idea";
+}
+
+function cleanProjectBlockType(value: unknown) {
+  const type = cleanText(value, 12);
+  return ["checklist", "link", "table"].includes(type) ? type : "";
+}
+
+function cleanProjectBlockContent(value: unknown) {
+  if (typeof value !== "string") return "{}";
+  const content = value.slice(0, 50000);
+  try {
+    JSON.parse(content);
+    return content;
+  } catch {
+    return "{}";
+  }
 }
 
 function currentWeekBounds() {
@@ -274,6 +300,309 @@ export async function POST(request: Request) {
         );
       }
       return NextResponse.json({ area });
+    }
+
+    if (action === "create-knowledge-project") {
+      const title = cleanText(body.title, 180);
+      const description = cleanText(body.description, 4000);
+      const status = cleanProjectStatus(body.status);
+      if (!title) {
+        return NextResponse.json(
+          { error: "Bitte gib dem Projekt einen Titel." },
+          { status: 400 },
+        );
+      }
+
+      const result = await db.transaction(async (tx) => {
+        const [project] = await tx
+          .insert(knowledgeProjects)
+          .values({ userId: user.id, title, description, status })
+          .returning({
+            id: knowledgeProjects.id,
+            title: knowledgeProjects.title,
+            description: knowledgeProjects.description,
+            status: knowledgeProjects.status,
+          });
+        const [page] = await tx
+          .insert(knowledgeProjectPages)
+          .values({
+            projectId: project.id,
+            userId: user.id,
+            title: "Erste Gedanken",
+          })
+          .returning({
+            id: knowledgeProjectPages.id,
+            projectId: knowledgeProjectPages.projectId,
+            title: knowledgeProjectPages.title,
+            content: knowledgeProjectPages.content,
+            position: knowledgeProjectPages.position,
+          });
+        return { project, page };
+      });
+
+      return NextResponse.json(result);
+    }
+
+    if (action === "update-knowledge-project") {
+      const id = cleanText(body.id, 50);
+      const title = cleanText(body.title, 180);
+      const description = cleanText(body.description, 4000);
+      const status = cleanProjectStatus(body.status);
+      if (!title) {
+        return NextResponse.json(
+          { error: "Bitte gib dem Projekt einen Titel." },
+          { status: 400 },
+        );
+      }
+
+      const [project] = await db
+        .update(knowledgeProjects)
+        .set({ title, description, status, updatedAt: new Date() })
+        .where(
+          and(eq(knowledgeProjects.id, id), eq(knowledgeProjects.userId, user.id)),
+        )
+        .returning({
+          id: knowledgeProjects.id,
+          title: knowledgeProjects.title,
+          description: knowledgeProjects.description,
+          status: knowledgeProjects.status,
+        });
+      if (!project) {
+        return NextResponse.json(
+          { error: "Projekt nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ project });
+    }
+
+    if (action === "delete-knowledge-project") {
+      const id = cleanText(body.id, 50);
+      const [project] = await db
+        .delete(knowledgeProjects)
+        .where(
+          and(eq(knowledgeProjects.id, id), eq(knowledgeProjects.userId, user.id)),
+        )
+        .returning({ id: knowledgeProjects.id });
+      if (!project) {
+        return NextResponse.json(
+          { error: "Projekt nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ id: project.id });
+    }
+
+    if (action === "create-knowledge-project-page") {
+      const projectId = cleanText(body.projectId, 50);
+      const title = cleanText(body.title, 180);
+      if (!title) {
+        return NextResponse.json(
+          { error: "Bitte gib der Seite einen Titel." },
+          { status: 400 },
+        );
+      }
+
+      const [ownedProject] = await db
+        .select({ id: knowledgeProjects.id })
+        .from(knowledgeProjects)
+        .where(
+          and(
+            eq(knowledgeProjects.id, projectId),
+            eq(knowledgeProjects.userId, user.id),
+          ),
+        )
+        .limit(1);
+      if (!ownedProject) {
+        return NextResponse.json(
+          { error: "Projekt nicht gefunden." },
+          { status: 404 },
+        );
+      }
+
+      const [page] = await db
+        .insert(knowledgeProjectPages)
+        .values({ projectId, userId: user.id, title })
+        .returning({
+          id: knowledgeProjectPages.id,
+          projectId: knowledgeProjectPages.projectId,
+          title: knowledgeProjectPages.title,
+          content: knowledgeProjectPages.content,
+          position: knowledgeProjectPages.position,
+        });
+      return NextResponse.json({ page });
+    }
+
+    if (action === "update-knowledge-project-page") {
+      const id = cleanText(body.id, 50);
+      const title = cleanText(body.title, 180);
+      const content = cleanText(body.content, 50000);
+      if (!title) {
+        return NextResponse.json(
+          { error: "Bitte gib der Seite einen Titel." },
+          { status: 400 },
+        );
+      }
+
+      const [page] = await db
+        .update(knowledgeProjectPages)
+        .set({ title, content, updatedAt: new Date() })
+        .where(
+          and(
+            eq(knowledgeProjectPages.id, id),
+            eq(knowledgeProjectPages.userId, user.id),
+          ),
+        )
+        .returning({
+          id: knowledgeProjectPages.id,
+          projectId: knowledgeProjectPages.projectId,
+          title: knowledgeProjectPages.title,
+          content: knowledgeProjectPages.content,
+          position: knowledgeProjectPages.position,
+        });
+      if (!page) {
+        return NextResponse.json(
+          { error: "Notizseite nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ page });
+    }
+
+    if (action === "delete-knowledge-project-page") {
+      const id = cleanText(body.id, 50);
+      const [page] = await db
+        .delete(knowledgeProjectPages)
+        .where(
+          and(
+            eq(knowledgeProjectPages.id, id),
+            eq(knowledgeProjectPages.userId, user.id),
+          ),
+        )
+        .returning({ id: knowledgeProjectPages.id });
+      if (!page) {
+        return NextResponse.json(
+          { error: "Notizseite nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ id: page.id });
+    }
+
+    if (action === "create-knowledge-project-block") {
+      const pageId = cleanText(body.pageId, 50);
+      const type = cleanProjectBlockType(body.type);
+      if (!type) {
+        return NextResponse.json(
+          { error: "Dieser Inhaltsblock ist nicht verfügbar." },
+          { status: 400 },
+        );
+      }
+
+      const [ownedPage] = await db
+        .select({ id: knowledgeProjectPages.id })
+        .from(knowledgeProjectPages)
+        .where(
+          and(
+            eq(knowledgeProjectPages.id, pageId),
+            eq(knowledgeProjectPages.userId, user.id),
+          ),
+        )
+        .limit(1);
+      if (!ownedPage) {
+        return NextResponse.json(
+          { error: "Notizseite nicht gefunden." },
+          { status: 404 },
+        );
+      }
+
+      const defaults = {
+        checklist: {
+          title: "Checkliste",
+          content: JSON.stringify({ items: [{ text: "", done: false }] }),
+        },
+        link: {
+          title: "Link",
+          content: JSON.stringify({ url: "", description: "" }),
+        },
+        table: {
+          title: "Tabelle",
+          content: JSON.stringify({
+            columns: ["Spalte 1", "Spalte 2"],
+            rows: [["", ""]],
+          }),
+        },
+      } as const;
+      const preset = defaults[type as keyof typeof defaults];
+
+      const [block] = await db
+        .insert(knowledgeProjectBlocks)
+        .values({
+          pageId,
+          userId: user.id,
+          type,
+          title: preset.title,
+          content: preset.content,
+        })
+        .returning({
+          id: knowledgeProjectBlocks.id,
+          pageId: knowledgeProjectBlocks.pageId,
+          type: knowledgeProjectBlocks.type,
+          title: knowledgeProjectBlocks.title,
+          content: knowledgeProjectBlocks.content,
+          position: knowledgeProjectBlocks.position,
+        });
+      return NextResponse.json({ block });
+    }
+
+    if (action === "update-knowledge-project-block") {
+      const id = cleanText(body.id, 50);
+      const title = cleanText(body.title, 180);
+      const content = cleanProjectBlockContent(body.content);
+      const [block] = await db
+        .update(knowledgeProjectBlocks)
+        .set({ title, content, updatedAt: new Date() })
+        .where(
+          and(
+            eq(knowledgeProjectBlocks.id, id),
+            eq(knowledgeProjectBlocks.userId, user.id),
+          ),
+        )
+        .returning({
+          id: knowledgeProjectBlocks.id,
+          pageId: knowledgeProjectBlocks.pageId,
+          type: knowledgeProjectBlocks.type,
+          title: knowledgeProjectBlocks.title,
+          content: knowledgeProjectBlocks.content,
+          position: knowledgeProjectBlocks.position,
+        });
+      if (!block) {
+        return NextResponse.json(
+          { error: "Inhalt nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ block });
+    }
+
+    if (action === "delete-knowledge-project-block") {
+      const id = cleanText(body.id, 50);
+      const [block] = await db
+        .delete(knowledgeProjectBlocks)
+        .where(
+          and(
+            eq(knowledgeProjectBlocks.id, id),
+            eq(knowledgeProjectBlocks.userId, user.id),
+          ),
+        )
+        .returning({ id: knowledgeProjectBlocks.id });
+      if (!block) {
+        return NextResponse.json(
+          { error: "Inhalt nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ id: block.id });
     }
 
     if (action === "create-task") {

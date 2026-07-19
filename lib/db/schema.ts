@@ -80,6 +80,79 @@ export const taskProjects = pgTable(
   ],
 );
 
+export const knowledgeProjects = pgTable(
+  "knowledge_projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    status: text("status").notNull().default("idea"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("knowledge_projects_user_id_idx").on(table.userId)],
+);
+
+export const knowledgeProjectPages = pgTable(
+  "knowledge_project_pages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => knowledgeProjects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    content: text("content").notNull().default(""),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("knowledge_project_pages_project_id_idx").on(table.projectId),
+    index("knowledge_project_pages_user_id_idx").on(table.userId),
+  ],
+);
+
+export const knowledgeProjectBlocks = pgTable(
+  "knowledge_project_blocks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pageId: uuid("page_id")
+      .notNull()
+      .references(() => knowledgeProjectPages.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    title: text("title").notNull().default(""),
+    content: text("content").notNull().default("{}"),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("knowledge_project_blocks_page_id_idx").on(table.pageId),
+    index("knowledge_project_blocks_user_id_idx").on(table.userId),
+  ],
+);
+
 export const tasks = pgTable(
   "tasks",
   {
