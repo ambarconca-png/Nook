@@ -431,6 +431,57 @@ export async function POST(request: Request) {
       return NextResponse.json({ area });
     }
 
+    if (action === "update-area") {
+      const id = cleanText(body.id, 50);
+      const name = cleanText(body.name, 80);
+      if (!name) {
+        return NextResponse.json(
+          { error: "Bitte gib dem Bereich einen Namen." },
+          { status: 400 },
+        );
+      }
+      const [area] = await db
+        .update(areas)
+        .set({ name })
+        .where(and(eq(areas.id, id), eq(areas.userId, user.id)))
+        .returning({ id: areas.id, name: areas.name });
+      if (!area) {
+        return NextResponse.json(
+          { error: "Bereich nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ area });
+    }
+
+    if (action === "delete-area") {
+      const id = cleanText(body.id, 50);
+      const deleted = await db.transaction(async (tx) => {
+        const [ownedArea] = await tx
+          .select({ id: areas.id })
+          .from(areas)
+          .where(and(eq(areas.id, id), eq(areas.userId, user.id)))
+          .limit(1);
+        if (!ownedArea) return null;
+
+        await tx
+          .delete(tasks)
+          .where(and(eq(tasks.areaId, id), eq(tasks.userId, user.id)));
+        const [area] = await tx
+          .delete(areas)
+          .where(and(eq(areas.id, id), eq(areas.userId, user.id)))
+          .returning({ id: areas.id });
+        return area;
+      });
+      if (!deleted) {
+        return NextResponse.json(
+          { error: "Bereich nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ id: deleted.id });
+    }
+
     if (action === "create-knowledge-project") {
       const title = cleanText(body.title, 180);
       const description = cleanText(body.description, 4000);
@@ -939,6 +990,23 @@ export async function POST(request: Request) {
       return NextResponse.json({
         project: { ...project, endDate: project.endDate ?? undefined },
       });
+    }
+
+    if (action === "delete-task-project") {
+      const id = cleanText(body.id, 50);
+      const [project] = await db
+        .delete(taskProjects)
+        .where(
+          and(eq(taskProjects.id, id), eq(taskProjects.userId, user.id)),
+        )
+        .returning({ id: taskProjects.id });
+      if (!project) {
+        return NextResponse.json(
+          { error: "Projekt nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ id: project.id });
     }
 
     if (action === "update-task") {

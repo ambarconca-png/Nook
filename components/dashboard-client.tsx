@@ -439,6 +439,53 @@ export function DashboardClient({
     }
   }
 
+  async function editArea(area: Area) {
+    const name = window.prompt("Wie soll der Bereich heißen?", area.name);
+    if (!name?.trim() || name.trim() === area.name) return;
+    try {
+      const result = await dashboardAction<{ area: Area }>({
+        action: "update-area",
+        id: area.id,
+        name,
+      });
+      setAreas((current) =>
+        current.map((item) => (item.id === area.id ? result.area : item)),
+      );
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Bereich konnte nicht bearbeitet werden.",
+      );
+    }
+  }
+
+  async function deleteArea(area: Area) {
+    if (
+      !window.confirm(
+        `Möchtest du den Bereich „${area.name}“ wirklich löschen?\n\nAlle Projekte und Aufgaben in diesem Bereich werden ebenfalls gelöscht.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await dashboardAction({ action: "delete-area", id: area.id });
+      setAreas((current) => current.filter((item) => item.id !== area.id));
+      setProjects((current) =>
+        current.filter((project) => project.areaId !== area.id),
+      );
+      setTasks((current) =>
+        current.filter((task) => task.areaId !== area.id),
+      );
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Bereich konnte nicht gelöscht werden.",
+      );
+    }
+  }
+
   async function addTask(
     areaId: string,
     projectId?: string,
@@ -633,6 +680,39 @@ export function DashboardClient({
       );
     } finally {
       setEditProjectSaving(false);
+    }
+  }
+
+  async function deleteProject(project: Project) {
+    if (
+      !window.confirm(
+        `Möchtest du das Projekt „${project.title}“ löschen?\n\nDie enthaltenen Aufgaben bleiben als direkte To-dos im Bereich erhalten.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await dashboardAction({
+        action: "delete-task-project",
+        id: project.id,
+      });
+      setProjects((current) =>
+        current.filter((item) => item.id !== project.id),
+      );
+      setTasks((current) =>
+        current.map((task) =>
+          task.projectId === project.id
+            ? { ...task, projectId: undefined }
+            : task,
+        ),
+      );
+      if (editingProject?.id === project.id) setEditingProject(null);
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Projekt konnte nicht gelöscht werden.",
+      );
     }
   }
 
@@ -1260,16 +1340,30 @@ export function DashboardClient({
                     title={area.name}
                     subtitle={`${directTasks.filter((task) => !task.done).length} direkte Aufgaben`}
                     action={
-                      <div className="flex flex-wrap justify-end gap-3">
+                      <div className="flex flex-wrap items-center justify-end gap-1">
+                        <button
+                          onClick={() => editArea(area)}
+                          className="grid h-10 w-10 place-items-center rounded-full text-nook-muted transition hover:bg-black/5 hover:text-nook-ink"
+                          aria-label={`${area.name} bearbeiten`}
+                        >
+                          <Pencil size={15} strokeWidth={1.8} />
+                        </button>
+                        <button
+                          onClick={() => deleteArea(area)}
+                          className="grid h-10 w-10 place-items-center rounded-full text-nook-muted transition hover:bg-rose-50 hover:text-rose-700"
+                          aria-label={`${area.name} löschen`}
+                        >
+                          <Trash2 size={15} strokeWidth={1.8} />
+                        </button>
                         <button
                           onClick={() => addTask(area.id)}
-                          className="text-sm text-nook-teal"
+                          className="ml-1 min-h-10 px-2 text-sm text-nook-teal"
                         >
                           + Aufgabe
                         </button>
                         <button
                           onClick={() => addProject(area.id)}
-                          className="text-sm text-nook-violet"
+                          className="min-h-10 px-2 text-sm text-nook-violet"
                         >
                           + Projekt
                         </button>
@@ -1310,10 +1404,17 @@ export function DashboardClient({
                               <h3 className="font-medium">{project.title}</h3>
                               <button
                                 onClick={() => openProjectEditor(project)}
-                                className="grid h-7 w-7 place-items-center rounded-full text-nook-muted transition hover:bg-black/5 hover:text-nook-ink"
+                                className="grid h-9 w-9 place-items-center rounded-full text-nook-muted transition hover:bg-black/5 hover:text-nook-ink"
                                 aria-label={`${project.title} bearbeiten`}
                               >
                                 <Pencil size={14} strokeWidth={1.8} />
+                              </button>
+                              <button
+                                onClick={() => deleteProject(project)}
+                                className="grid h-9 w-9 place-items-center rounded-full text-nook-muted transition hover:bg-rose-50 hover:text-rose-700"
+                                aria-label={`${project.title} löschen`}
+                              >
+                                <Trash2 size={14} strokeWidth={1.8} />
                               </button>
                             </div>
                             {project.description && (
