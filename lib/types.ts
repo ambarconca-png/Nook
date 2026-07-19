@@ -112,5 +112,6 @@ export type TrackingField = {
     | "text";
   unit?: string;
   aggregation?: "day" | "week" | "month" | "none";
+  goal?: number;
   options: string[];
 };

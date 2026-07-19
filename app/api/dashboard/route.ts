@@ -144,6 +144,11 @@ function cleanTrackingFields(value: unknown) {
         ["day", "week", "month", "none"],
         "month",
       );
+      const rawGoal = Number(field.goal);
+      const goal =
+        Number.isFinite(rawGoal) && rawGoal > 0 && rawGoal <= 1_000_000_000
+          ? rawGoal
+          : undefined;
       const options = Array.isArray(field.options)
         ? field.options
             .filter((option): option is string => typeof option === "string")
@@ -151,7 +156,9 @@ function cleanTrackingFields(value: unknown) {
             .filter(Boolean)
             .slice(0, 20)
         : [];
-      return label ? { id, label, type, unit, aggregation, options } : null;
+      return label
+        ? { id, label, type, unit, aggregation, goal, options }
+        : null;
     })
     .filter(
       (
@@ -162,6 +169,7 @@ function cleanTrackingFields(value: unknown) {
         type: string;
         unit: string | undefined;
         aggregation: string;
+        goal: number | undefined;
         options: string[];
       } => field !== null,
     );

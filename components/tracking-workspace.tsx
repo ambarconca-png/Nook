@@ -81,6 +81,7 @@ function newTrackingField(): TrackingField {
     label: "",
     type: "scale",
     aggregation: "month",
+    goal: undefined,
     options: [],
   };
 }
@@ -817,7 +818,7 @@ export function TrackingWorkspace({
                   </button>
                 </div>
                 {(field.type === "number" || field.type === "duration") && (
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
                     <label className="block text-xs font-medium">
                       Einheit
                       <input
@@ -849,6 +850,10 @@ export function TrackingWorkspace({
                                     ...item,
                                     aggregation: event.target
                                       .value as TrackingField["aggregation"],
+                                    goal:
+                                      event.target.value === "none"
+                                        ? undefined
+                                        : item.goal,
                                   }
                                 : item,
                             ),
@@ -861,6 +866,32 @@ export function TrackingWorkspace({
                         <option value="month">Diesen Monat</option>
                         <option value="none">Keine Summe</option>
                       </select>
+                    </label>
+                    <label className="block text-xs font-medium">
+                      Ziel (optional)
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        disabled={field.aggregation === "none"}
+                        value={field.goal ?? ""}
+                        onChange={(event) =>
+                          setTrackerFields((current) =>
+                            current.map((item, index) =>
+                              index === fieldIndex
+                                ? {
+                                    ...item,
+                                    goal: event.target.value
+                                      ? Number(event.target.value)
+                                      : undefined,
+                                  }
+                                : item,
+                            ),
+                          )
+                        }
+                        className="mt-1.5 w-full rounded-[15px] border border-black/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-nook-violet disabled:opacity-40"
+                        placeholder={field.unit ? `z. B. 50 ${field.unit}` : "z. B. 50"}
+                      />
                     </label>
                   </div>
                 )}
@@ -1228,6 +1259,17 @@ function CustomTrackerOverview({
                 (sum, entry) => sum + Number(entry.data[field.id] ?? 0),
                 0,
               );
+              const goal = field.goal;
+              const progress = goal
+                ? Math.min(100, Math.max(0, (total / goal) * 100))
+                : 0;
+              const remaining = goal ? Math.max(0, goal - total) : 0;
+              const unit =
+                field.unit || (field.type === "duration" ? "Min." : "");
+              const formatNumber = (value: number) =>
+                new Intl.NumberFormat("de-CH", {
+                  maximumFractionDigits: 2,
+                }).format(value);
               return (
                 <div
                   key={field.id}
@@ -1240,19 +1282,34 @@ function CustomTrackerOverview({
                     </p>
                   </div>
                   <p className="mt-1 text-2xl font-semibold tracking-[-0.035em]">
-                    {new Intl.NumberFormat("de-CH", {
-                      maximumFractionDigits: 2,
-                    }).format(total)}
-                    {field.unit ? (
-                      <span className="ml-1 text-sm font-normal text-nook-muted">
-                        {field.unit}
+                    {formatNumber(total)}
+                    {goal && (
+                      <span className="text-base font-normal text-nook-muted">
+                        {" "}
+                        von {formatNumber(goal)}
                       </span>
-                    ) : field.type === "duration" ? (
+                    )}
+                    {unit && (
                       <span className="ml-1 text-sm font-normal text-nook-muted">
-                        Min.
+                        {unit}
                       </span>
-                    ) : null}
+                    )}
                   </p>
+                  {goal && (
+                    <>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/[0.06]">
+                        <div
+                          className={`h-full rounded-full ${dotClasses[tracker.color]} transition-[width] duration-700`}
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <p className="mt-2 text-[11px] text-nook-muted">
+                        {remaining === 0
+                          ? "Ziel für diesen Zeitraum erreicht."
+                          : `Noch ${formatNumber(remaining)}${unit ? ` ${unit}` : ""} bis zum Ziel.`}
+                      </p>
+                    </>
+                  )}
                 </div>
               );
             })}
