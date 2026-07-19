@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -118,9 +118,13 @@ async function trackingAction<T>(body: Record<string, unknown>) {
 export function TrackingWorkspace({
   initialTrackers,
   initialEntries,
+  onTrackersChange,
+  onEntriesChange,
 }: {
   initialTrackers: TrackingTracker[];
   initialEntries: TrackingEntry[];
+  onTrackersChange?: (trackers: TrackingTracker[]) => void;
+  onEntriesChange?: (entries: TrackingEntry[]) => void;
 }) {
   const [trackers, setTrackers] = useState(initialTrackers);
   const [entries, setEntries] = useState(initialEntries);
@@ -128,6 +132,14 @@ export function TrackingWorkspace({
   const [activeTracker, setActiveTracker] = useState<TrackingTracker | null>(
     null,
   );
+
+  useEffect(() => {
+    onTrackersChange?.(trackers);
+  }, [onTrackersChange, trackers]);
+
+  useEffect(() => {
+    onEntriesChange?.(entries);
+  }, [entries, onEntriesChange]);
   const [selectedDay, setSelectedDay] = useState("");
   const [editingEntryId, setEditingEntryId] = useState("");
   const [entryStartedAt, setEntryStartedAt] = useState(localDateTimeInput);

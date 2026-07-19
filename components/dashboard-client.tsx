@@ -42,6 +42,7 @@ import type {
   Project,
   Routine,
   Task,
+  TrackingEntry,
   TrackingTracker,
 } from "@/lib/types";
 
@@ -119,6 +120,15 @@ function getGreeting(hour: number) {
   return "Guten Abend";
 }
 
+function zurichDateKey(value: string | Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Zurich",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(typeof value === "string" ? new Date(value) : value);
+}
+
 export function DashboardClient({
   displayName,
   initialData,
@@ -193,6 +203,9 @@ export function DashboardClient({
   const [trackingTrackers, setTrackingTrackers] = useState(
     initialData.trackingTrackers,
   );
+  const [trackingEntries, setTrackingEntries] = useState<TrackingEntry[]>(
+    initialData.trackingEntries,
+  );
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("nook-theme");
@@ -215,6 +228,66 @@ export function DashboardClient({
     () => tasks.filter((task) => task.dueToday),
     [tasks],
   );
+  const todayTracking = useMemo(() => {
+    const todayKey = zurichDateKey(new Date());
+    const todaysEntries = trackingEntries.filter(
+      (entry) => zurichDateKey(entry.startedAt) === todayKey,
+    );
+    const latestPeriod = trackingEntries
+      .filter((entry) => {
+        const tracker = trackingTrackers.find(
+          (item) => item.id === entry.trackerId,
+        );
+        return tracker?.type === "menstruation";
+      })
+      .sort(
+        (left, right) =>
+          new Date(right.startedAt).getTime() -
+          new Date(left.startedAt).getTime(),
+      )[0];
+    const cycleDay = latestPeriod
+      ? Math.floor(
+          (new Date(`${todayKey}T12:00:00`).getTime() -
+            new Date(
+              `${zurichDateKey(latestPeriod.startedAt)}T12:00:00`,
+            ).getTime()) /
+            86_400_000,
+        ) + 1
+      : null;
+
+    const dailyGoals = trackingTrackers.flatMap((tracker) =>
+      tracker.fields
+        .filter(
+          (field) =>
+            field.aggregation === "day" &&
+            typeof field.goal === "number" &&
+            field.goal > 0 &&
+            (field.type === "number" || field.type === "duration"),
+        )
+        .map((field) => {
+          const value = todaysEntries
+            .filter((entry) => entry.trackerId === tracker.id)
+            .reduce((sum, entry) => {
+              const entryValue = Number(entry.data[field.id]);
+              return sum + (Number.isFinite(entryValue) ? entryValue : 0);
+            }, 0);
+          return {
+            id: `${tracker.id}-${field.id}`,
+            label: tracker.name,
+            value,
+            goal: field.goal as number,
+            unit: field.unit ?? (field.type === "duration" ? "Min." : ""),
+          };
+        }),
+    );
+
+    return {
+      entryCount: todaysEntries.length,
+      cycleDay:
+        cycleDay !== null && cycleDay > 0 && cycleDay <= 90 ? cycleDay : null,
+      dailyGoals: dailyGoals.slice(0, 2),
+    };
+  }, [trackingEntries, trackingTrackers]);
   const activeKnowledgeProject = knowledgeProjects.find(
     (project) => project.id === activeKnowledgeProjectId,
   );
@@ -1210,10 +1283,68 @@ export function DashboardClient({
                 accent="pink"
                 onOpen={() => setPage("tracking")}
               >
-                <p className="py-7 text-sm leading-6 text-nook-muted">
-                  Menstruation, Kopfschmerzen oder eigene Beobachtungen – ruhig,
-                  privat und ohne Bewertung.
-                </p>
+                <div className="space-y-3 py-2">
+                  <div className="rounded-2xl border border-rose-200/60 bg-rose-50/60 px-4 py-3 dark:border-rose-300/10 dark:bg-rose-300/5">
+                    <p className="text-sm font-medium text-rose-800 dark:text-rose-200">
+                      {todayTracking.entryCount === 0
+                        ? "Möchtest du heute etwas erfassen?"
+                        : todayTracking.entryCount === 1
+                          ? "Für heute ist bereits ein Eintrag festgehalten."
+                          : `Für heute sind bereits ${todayTracking.entryCount} Einträge festgehalten.`}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-nook-muted">
+                      Tippe auf die Karte, um Tracking zu öffnen.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-2xl bg-white/55 px-3 py-3 dark:bg-white/5">
+                      <p className="text-xs text-nook-muted">Heute</p>
+                      <p className="mt-1 text-sm font-semibold text-rose-700 dark:text-rose-200">
+                        {todayTracking.entryCount}{" "}
+                        {todayTracking.entryCount === 1
+                          ? "Eintrag"
+                          : "Einträge"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-white/55 px-3 py-3 dark:bg-white/5">
+                      <p className="text-xs text-nook-muted">
+                        {todayTracking.cycleDay ? "Zyklus" : "Tagesziele"}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-rose-700 dark:text-rose-200">
+                        {todayTracking.cycleDay
+                          ? `Tag ${todayTracking.cycleDay}`
+                          : todayTracking.dailyGoals.length > 0
+                            ? `${todayTracking.dailyGoals.length} aktiv`
+                            : "Noch keine"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {todayTracking.dailyGoals.map((goal) => {
+                    const progress = Math.min(
+                      100,
+                      Math.round((goal.value / goal.goal) * 100),
+                    );
+                    return (
+                      <div key={goal.id} className="px-1">
+                        <div className="flex items-center justify-between gap-3 text-xs">
+                          <span className="font-medium">{goal.label}</span>
+                          <span className="text-nook-muted">
+                            {goal.value} / {goal.goal}
+                            {goal.unit ? ` ${goal.unit}` : ""}
+                          </span>
+                        </div>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-rose-100 dark:bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-rose-400 transition-[width] duration-300"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </NookCard>
 
               <NookCard
@@ -1573,7 +1704,9 @@ export function DashboardClient({
           >
             <TrackingWorkspace
               initialTrackers={trackingTrackers}
-              initialEntries={initialData.trackingEntries}
+              initialEntries={trackingEntries}
+              onTrackersChange={setTrackingTrackers}
+              onEntriesChange={setTrackingEntries}
             />
           </PageHeading>
         )}
