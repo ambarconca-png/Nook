@@ -12,6 +12,8 @@ import {
   routines,
   taskProjects,
   tasks,
+  trackingEntries,
+  trackingTrackers,
 } from "@/lib/db/schema";
 import { localDate } from "@/lib/dashboard";
 
@@ -107,6 +109,46 @@ function cleanWeekdays(value: unknown) {
         day <= 7,
     ),
   );
+}
+
+function cleanDateTime(value: unknown) {
+  if (typeof value !== "string" || value.length > 40) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function cleanTrackingData(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "{}";
+  return JSON.stringify(value).slice(0, 50000);
+}
+
+function cleanTrackingFields(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, 12)
+    .map((rawField, index) => {
+      if (!rawField || typeof rawField !== "object") return null;
+      const field = rawField as Record<string, unknown>;
+      const label = cleanText(field.label, 80);
+      const type = cleanRoutineChoice(
+        field.type,
+        ["boolean", "scale", "number", "duration", "multiselect", "text"],
+        "text",
+      );
+      const id =
+        cleanText(field.id, 50).replace(/[^a-zA-Z0-9_-]/g, "") ||
+        `field_${index + 1}`;
+      const unit = cleanText(field.unit, 40) || undefined;
+      const options = Array.isArray(field.options)
+        ? field.options
+            .filter((option): option is string => typeof option === "string")
+            .map((option) => option.trim().slice(0, 80))
+            .filter(Boolean)
+            .slice(0, 20)
+        : [];
+      return label ? { id, label, type, unit, options } : null;
+    })
+    .filter(Boolean);
 }
 
 function currentWeekBounds() {
@@ -1011,6 +1053,251 @@ export async function POST(request: Request) {
         );
       }
       return NextResponse.json({ id, done });
+    }
+
+    if (action === "create-custom-tracker") {
+      const name = cleanText(body.name, 120);
+      const inputType = cleanRoutineChoice(
+        body.inputType,
+        ["boolean", "scale", "number", "duration", "multiselect", "text"],
+        "text",
+      );
+      const unit = cleanText(body.unit, 40) || null;
+      const color = cleanRoutineChoice(
+        body.color,
+        ["rose", "peach", "violet", "blue", "teal"],
+        "violet",
+      );
+      const options = Array.isArray(body.options)
+        ? body.options
+            .filter((option): option is string => typeof option === "string")
+            .map((option) => option.trim().slice(0, 80))
+            .filter(Boolean)
+            .slice(0, 20)
+        : [];
+      const fields = cleanTrackingFields(body.fields);
+      if (!name) {
+        return NextResponse.json(
+          { error: "Bitte gib dem Tracker einen Namen." },
+          { status: 400 },
+        );
+      }
+      if (fields.length === 0) {
+        return NextResponse.json(
+          { error: "Füge mindestens ein Feld hinzu." },
+          { status: 400 },
+        );
+      }
+
+      const [tracker] = await db
+        .insert(trackingTrackers)
+        .values({
+          userId: user.id,
+          type: "custom",
+          name,
+          inputType,
+          unit,
+          options: JSON.stringify(options),
+          fields: JSON.stringify(fields),
+          color,
+        })
+        .onConflictDoNothing()
+        .returning({
+          id: trackingTrackers.id,
+          type: trackingTrackers.type,
+          name: trackingTrackers.name,
+          inputType: trackingTrackers.inputType,
+          unit: trackingTrackers.unit,
+          color: trackingTrackers.color,
+          fields: trackingTrackers.fields,
+        });
+      if (!tracker) {
+        return NextResponse.json(
+          { error: "Dieser Tracker existiert bereits." },
+          { status: 409 },
+        );
+      }
+      return NextResponse.json({
+        tracker: {
+          ...tracker,
+          unit: tracker.unit ?? undefined,
+          options,
+          fields,
+        },
+      });
+    }
+
+    if (action === "delete-custom-tracker") {
+      const id = cleanText(body.id, 50);
+      const [tracker] = await db
+        .delete(trackingTrackers)
+        .where(
+          and(
+            eq(trackingTrackers.id, id),
+            eq(trackingTrackers.userId, user.id),
+            eq(trackingTrackers.type, "custom"),
+          ),
+        )
+        .returning({ id: trackingTrackers.id });
+      if (!tracker) {
+        return NextResponse.json(
+          { error: "Tracker nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ id: tracker.id });
+    }
+
+    if (action === "create-tracking-entry") {
+      let trackerId = cleanText(body.trackerId, 50);
+      const trackerType = cleanRoutineChoice(
+        body.trackerType,
+        ["menstruation", "headache", "custom"],
+        "custom",
+      );
+      const startedAt = cleanDateTime(body.startedAt);
+      const endedAt = cleanDateTime(body.endedAt);
+      const data = cleanTrackingData(body.data);
+      const notes = cleanText(body.notes, 10000);
+      if (!startedAt) {
+        return NextResponse.json(
+          { error: "Bitte gib einen gültigen Beginn an." },
+          { status: 400 },
+        );
+      }
+      if (endedAt && endedAt < startedAt) {
+        return NextResponse.json(
+          { error: "Das Ende kann nicht vor dem Beginn liegen." },
+          { status: 400 },
+        );
+      }
+
+      let tracker;
+      if (trackerId) {
+        [tracker] = await db
+          .select({
+            id: trackingTrackers.id,
+            type: trackingTrackers.type,
+            name: trackingTrackers.name,
+            inputType: trackingTrackers.inputType,
+            unit: trackingTrackers.unit,
+            options: trackingTrackers.options,
+            fields: trackingTrackers.fields,
+            color: trackingTrackers.color,
+          })
+          .from(trackingTrackers)
+          .where(
+            and(
+              eq(trackingTrackers.id, trackerId),
+              eq(trackingTrackers.userId, user.id),
+            ),
+          )
+          .limit(1);
+      } else if (trackerType === "menstruation" || trackerType === "headache") {
+        const name =
+          trackerType === "menstruation"
+            ? "Menstruation"
+            : "Kopfschmerzen & Migräne";
+        [tracker] = await db
+          .insert(trackingTrackers)
+          .values({
+            userId: user.id,
+            type: trackerType,
+            name,
+            color: trackerType === "menstruation" ? "rose" : "violet",
+          })
+          .onConflictDoUpdate({
+            target: [
+              trackingTrackers.userId,
+              trackingTrackers.type,
+              trackingTrackers.name,
+            ],
+            set: { name },
+          })
+          .returning({
+            id: trackingTrackers.id,
+            type: trackingTrackers.type,
+            name: trackingTrackers.name,
+            inputType: trackingTrackers.inputType,
+            unit: trackingTrackers.unit,
+            options: trackingTrackers.options,
+            fields: trackingTrackers.fields,
+            color: trackingTrackers.color,
+          });
+        trackerId = tracker.id;
+      }
+
+      if (!tracker) {
+        return NextResponse.json(
+          { error: "Tracker nicht gefunden." },
+          { status: 404 },
+        );
+      }
+
+      const [entry] = await db
+        .insert(trackingEntries)
+        .values({
+          trackerId: tracker.id,
+          userId: user.id,
+          startedAt,
+          endedAt,
+          data,
+          notes,
+        })
+        .returning({
+          id: trackingEntries.id,
+          trackerId: trackingEntries.trackerId,
+          startedAt: trackingEntries.startedAt,
+          endedAt: trackingEntries.endedAt,
+          notes: trackingEntries.notes,
+        });
+      return NextResponse.json({
+        tracker: {
+          ...tracker,
+          inputType: tracker.inputType ?? undefined,
+          unit: tracker.unit ?? undefined,
+          options: (() => {
+            try {
+              return JSON.parse(tracker.options);
+            } catch {
+              return [];
+            }
+          })(),
+          fields: (() => {
+            try {
+              return JSON.parse(tracker.fields);
+            } catch {
+              return [];
+            }
+          })(),
+        },
+        entry: {
+          ...entry,
+          startedAt: entry.startedAt.toISOString(),
+          endedAt: entry.endedAt?.toISOString(),
+          data: JSON.parse(data),
+        },
+      });
+    }
+
+    if (action === "delete-tracking-entry") {
+      const id = cleanText(body.id, 50);
+      const [entry] = await db
+        .delete(trackingEntries)
+        .where(
+          and(
+            eq(trackingEntries.id, id),
+            eq(trackingEntries.userId, user.id),
+          ),
+        )
+        .returning({ id: trackingEntries.id });
+      if (!entry) {
+        return NextResponse.json(
+          { error: "Eintrag nicht gefunden." },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ id: entry.id });
     }
 
     if (action === "create-routine") {

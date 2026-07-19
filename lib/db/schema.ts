@@ -254,4 +254,59 @@ export const routineCompletions = pgTable(
   ],
 );
 
+export const trackingTrackers = pgTable(
+  "tracking_trackers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    name: text("name").notNull(),
+    inputType: text("input_type"),
+    unit: text("unit"),
+    options: text("options").notNull().default("[]"),
+    fields: text("fields").notNull().default("[]"),
+    color: text("color").notNull().default("violet"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("tracking_trackers_user_id_idx").on(table.userId),
+    uniqueIndex("tracking_tracker_type_name_unique").on(
+      table.userId,
+      table.type,
+      table.name,
+    ),
+  ],
+);
+
+export const trackingEntries = pgTable(
+  "tracking_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    trackerId: uuid("tracker_id")
+      .notNull()
+      .references(() => trackingTrackers.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    data: text("data").notNull().default("{}"),
+    notes: text("notes").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("tracking_entries_user_started_idx").on(
+      table.userId,
+      table.startedAt,
+    ),
+    index("tracking_entries_tracker_id_idx").on(table.trackerId),
+  ],
+);
+
 export type User = typeof users.$inferSelect;

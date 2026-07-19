@@ -29,6 +29,7 @@ import { TaskRow } from "@/components/task-row";
 import { RoutineRow } from "@/components/routine-row";
 import { InboxItemRow } from "@/components/inbox-item-row";
 import { KnowledgeProjectBlockCard } from "@/components/knowledge-project-block";
+import { TrackingWorkspace } from "@/components/tracking-workspace";
 import type { DashboardData } from "@/lib/dashboard";
 import type {
   Area,
@@ -1070,10 +1071,18 @@ export function DashboardClient({
                 title="Tracking"
                 subtitle="Heute erfassen"
                 icon={<HeartPulse size={19} />}
+                action={
+                  <button
+                    onClick={() => setPage("tracking")}
+                    className="text-sm text-nook-teal"
+                  >
+                    Öffnen
+                  </button>
+                }
               >
                 <p className="py-7 text-sm leading-6 text-nook-muted">
-                  Hier entsteht dein persönliches Tracking – ruhig, privat und
-                  ohne Bewertung.
+                  Menstruation, Kopfschmerzen oder eigene Beobachtungen – ruhig,
+                  privat und ohne Bewertung.
                 </p>
               </NookCard>
 
@@ -1407,23 +1416,20 @@ export function DashboardClient({
         {page === "tracking" && (
           <PageHeading
             title="Tracking"
-            subtitle="Zyklus, Migräne und Tagesform."
-            buttonLabel="Eintrag"
-            onButton={() =>
-              window.alert(
-                "Persönliches Tracking wird in einem eigenen, sorgfältigen Schritt umgesetzt.",
-              )
-            }
+            subtitle="Beobachten, ohne zu bewerten."
+            buttonLabel="Eigener Tracker"
+            onButton={() => {
+              setPage("tracking");
+              const button = document.querySelector<HTMLButtonElement>(
+                '[data-create-tracker="true"]',
+              );
+              button?.click();
+            }}
           >
-            <NookCard title="Dein Tracking entsteht behutsam">
-              <div className="max-w-xl py-6">
-                <p className="leading-7 text-nook-muted">
-                  Zyklus und Kopfschmerzen sind sensible Daten. Deshalb bauen
-                  wir diesen Bereich als eigenen nächsten Schritt – mit klaren
-                  Schätzungen, privaten Notizen und ohne Wertung.
-                </p>
-              </div>
-            </NookCard>
+            <TrackingWorkspace
+              initialTrackers={initialData.trackingTrackers}
+              initialEntries={initialData.trackingEntries}
+            />
           </PageHeading>
         )}
 

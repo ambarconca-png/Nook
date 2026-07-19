@@ -76,6 +76,40 @@ export type InboxItem = {
 
 export type TrackingEntry = {
   id: string;
-  type: "Zyklus" | "Kopfschmerzen" | "Tagesform";
-  note: string;
+  trackerId: string;
+  startedAt: string;
+  endedAt?: string;
+  data: Record<string, unknown>;
+  notes: string;
+};
+
+export type TrackingTracker = {
+  id: string;
+  type: "menstruation" | "headache" | "custom";
+  name: string;
+  inputType?:
+    | "boolean"
+    | "scale"
+    | "number"
+    | "duration"
+    | "multiselect"
+    | "text";
+  unit?: string;
+  options: string[];
+  fields: TrackingField[];
+  color: "rose" | "peach" | "violet" | "blue" | "teal";
+};
+
+export type TrackingField = {
+  id: string;
+  label: string;
+  type:
+    | "boolean"
+    | "scale"
+    | "number"
+    | "duration"
+    | "multiselect"
+    | "text";
+  unit?: string;
+  options: string[];
 };

@@ -1,0 +1,1 @@
+ALTER TABLE "tracking_trackers" ADD COLUMN "fields" text DEFAULT '[]' NOT NULL;

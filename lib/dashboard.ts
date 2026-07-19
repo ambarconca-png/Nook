@@ -12,6 +12,8 @@ import {
   routines,
   taskProjects,
   tasks,
+  trackingEntries,
+  trackingTrackers,
 } from "@/lib/db/schema";
 import type {
   Area,
@@ -22,6 +24,8 @@ import type {
   Project,
   Routine,
   Task,
+  TrackingEntry,
+  TrackingTracker,
 } from "@/lib/types";
 
 const TIME_ZONE = "Europe/Zurich";
@@ -75,6 +79,8 @@ export type DashboardData = {
   tasks: Task[];
   routines: Routine[];
   inboxItems: InboxItem[];
+  trackingTrackers: TrackingTracker[];
+  trackingEntries: TrackingEntry[];
 };
 
 export async function getDashboardData(userId: string): Promise<DashboardData> {
@@ -91,6 +97,8 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
     inboxRows,
     routineRows,
     routineCompletionRows,
+    trackingTrackerRows,
+    trackingEntryRows,
   ] =
     await Promise.all([
     db
@@ -219,6 +227,33 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
             ),
           ),
         ),
+      db
+        .select({
+          id: trackingTrackers.id,
+          type: trackingTrackers.type,
+          name: trackingTrackers.name,
+          inputType: trackingTrackers.inputType,
+          unit: trackingTrackers.unit,
+          options: trackingTrackers.options,
+          fields: trackingTrackers.fields,
+          color: trackingTrackers.color,
+        })
+        .from(trackingTrackers)
+        .where(eq(trackingTrackers.userId, userId))
+        .orderBy(asc(trackingTrackers.createdAt)),
+      db
+        .select({
+          id: trackingEntries.id,
+          trackerId: trackingEntries.trackerId,
+          startedAt: trackingEntries.startedAt,
+          endedAt: trackingEntries.endedAt,
+          data: trackingEntries.data,
+          notes: trackingEntries.notes,
+        })
+        .from(trackingEntries)
+        .where(eq(trackingEntries.userId, userId))
+        .orderBy(desc(trackingEntries.startedAt))
+        .limit(200),
     ]);
 
   return {
@@ -305,5 +340,97 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
       ...item,
       createdAt: item.createdAt.toISOString(),
     })),
+    trackingTrackers: trackingTrackerRows
+      .filter((tracker) =>
+        ["menstruation", "headache", "custom"].includes(tracker.type),
+      )
+      .map((tracker) => {
+        let options: string[] = [];
+        let fields: TrackingTracker["fields"] = [];
+        try {
+          const parsed = JSON.parse(tracker.options);
+          if (Array.isArray(parsed)) {
+            options = parsed.filter(
+              (option): option is string => typeof option === "string",
+            );
+          }
+        } catch {
+          options = [];
+        }
+        try {
+          const parsed = JSON.parse(tracker.fields);
+          if (Array.isArray(parsed)) {
+            fields = parsed.filter(
+              (field) =>
+                field &&
+                typeof field === "object" &&
+                typeof field.id === "string" &&
+                typeof field.label === "string" &&
+                ["boolean", "scale", "number", "duration", "multiselect", "text"].includes(
+                  field.type,
+                ),
+            );
+          }
+        } catch {
+          fields = [];
+        }
+        if (
+          fields.length === 0 &&
+          tracker.type === "custom" &&
+          tracker.inputType
+        ) {
+          fields = [
+            {
+              id: "value",
+              label: "Wert",
+              type: tracker.inputType as NonNullable<
+                TrackingTracker["inputType"]
+              >,
+              unit: tracker.unit ?? undefined,
+              options,
+            },
+          ];
+        }
+        return {
+          id: tracker.id,
+          type: tracker.type as TrackingTracker["type"],
+          name: tracker.name,
+          inputType: [
+            "boolean",
+            "scale",
+            "number",
+            "duration",
+            "multiselect",
+            "text",
+          ].includes(tracker.inputType ?? "")
+            ? (tracker.inputType as TrackingTracker["inputType"])
+            : undefined,
+          unit: tracker.unit ?? undefined,
+          options,
+          fields,
+          color: ["rose", "peach", "blue", "teal"].includes(tracker.color)
+            ? (tracker.color as TrackingTracker["color"])
+            : "violet",
+        };
+      }),
+    trackingEntries: trackingEntryRows.map((entry) => {
+      let data: Record<string, unknown> = {};
+      try {
+        const parsed = JSON.parse(entry.data);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          data = parsed as Record<string, unknown>;
+        }
+      } catch {
+        data = {};
+      }
+      return {
+        id: entry.id,
+        trackerId: entry.trackerId,
+        startedAt: entry.startedAt.toISOString(),
+        endedAt: entry.endedAt?.toISOString(),
+        data,
+        notes: entry.notes,
+      };
+    }),
   };
 }
