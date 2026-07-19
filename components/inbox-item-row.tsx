@@ -3,8 +3,8 @@
 import { useState } from "react";
 import {
   CheckCircle2,
-  FileText,
   FolderKanban,
+  HeartPulse,
   Pencil,
   Repeat2,
   Trash2,
@@ -21,7 +21,10 @@ export function InboxItemRow({
   item: InboxItem;
   onUpdate: (id: string, text: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
-  onOrganize: (id: string, destination: "todo" | "routine") => Promise<void>;
+  onOrganize: (
+    id: string,
+    destination: "todo" | "routine" | "tracking" | "project",
+  ) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(item.text);
@@ -123,16 +126,16 @@ export function InboxItemRow({
             onClick={() => run(() => onOrganize(item.id, "routine"))}
           />
           <ActionButton
-            icon={<FileText size={15} />}
-            label="Notiz"
-            disabled
-            title="Folgt mit dem Notiz-Modul"
+            icon={<HeartPulse size={15} />}
+            label="Tracking"
+            disabled={busy}
+            onClick={() => run(() => onOrganize(item.id, "tracking"))}
           />
           <ActionButton
             icon={<FolderKanban size={15} />}
             label="Projekt"
-            disabled
-            title="Folgt mit den Wissensprojekten"
+            disabled={busy}
+            onClick={() => run(() => onOrganize(item.id, "project"))}
           />
           <button
             onClick={() => {

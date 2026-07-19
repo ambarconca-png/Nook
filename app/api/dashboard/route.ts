@@ -291,7 +291,9 @@ export async function POST(request: Request) {
     if (action === "organize-inbox") {
       const id = cleanText(body.id, 50);
       const destination = cleanText(body.destination, 20);
-      if (destination !== "todo" && destination !== "routine") {
+      if (
+        !["todo", "routine", "tracking", "project"].includes(destination)
+      ) {
         return NextResponse.json(
           { error: "Dieses Ziel ist noch nicht verfügbar." },
           { status: 400 },
@@ -360,6 +362,118 @@ export async function POST(request: Request) {
               recurrence: "none",
               done: false,
             },
+          };
+        }
+
+        if (destination === "tracking") {
+          let [tracker] = await tx
+            .select({
+              id: trackingTrackers.id,
+              type: trackingTrackers.type,
+              name: trackingTrackers.name,
+              inputType: trackingTrackers.inputType,
+              unit: trackingTrackers.unit,
+              color: trackingTrackers.color,
+              fields: trackingTrackers.fields,
+            })
+            .from(trackingTrackers)
+            .where(
+              and(
+                eq(trackingTrackers.userId, user.id),
+                eq(trackingTrackers.type, "custom"),
+                eq(trackingTrackers.name, item.text),
+              ),
+            )
+            .limit(1);
+
+          const fields = [
+            {
+              id: "field_note",
+              label: "Eintrag",
+              type: "text",
+              options: [],
+            },
+          ];
+          if (!tracker) {
+            [tracker] = await tx
+              .insert(trackingTrackers)
+              .values({
+                userId: user.id,
+                type: "custom",
+                name: item.text,
+                inputType: "text",
+                options: "[]",
+                fields: JSON.stringify(fields),
+                color: "violet",
+              })
+              .returning({
+                id: trackingTrackers.id,
+                type: trackingTrackers.type,
+                name: trackingTrackers.name,
+                inputType: trackingTrackers.inputType,
+                unit: trackingTrackers.unit,
+                color: trackingTrackers.color,
+                fields: trackingTrackers.fields,
+              });
+          }
+
+          await tx
+            .update(inboxItems)
+            .set({ status: "tracking" })
+            .where(eq(inboxItems.id, id));
+
+          return {
+            destination,
+            tracker: {
+              ...tracker,
+              type: "custom" as const,
+              inputType: "text" as const,
+              unit: tracker.unit ?? undefined,
+              options: [],
+              fields: JSON.parse(tracker.fields),
+            },
+          };
+        }
+
+        if (destination === "project") {
+          const [project] = await tx
+            .insert(knowledgeProjects)
+            .values({
+              userId: user.id,
+              title: item.text,
+              description: "",
+              status: "idea",
+            })
+            .returning({
+              id: knowledgeProjects.id,
+              title: knowledgeProjects.title,
+              description: knowledgeProjects.description,
+              status: knowledgeProjects.status,
+            });
+          const [page] = await tx
+            .insert(knowledgeProjectPages)
+            .values({
+              projectId: project.id,
+              userId: user.id,
+              title: "Erste Gedanken",
+            })
+            .returning({
+              id: knowledgeProjectPages.id,
+              projectId: knowledgeProjectPages.projectId,
+              title: knowledgeProjectPages.title,
+              content: knowledgeProjectPages.content,
+              position: knowledgeProjectPages.position,
+            });
+
+          await tx
+            .update(inboxItems)
+            .set({ status: "project" })
+            .where(eq(inboxItems.id, id));
+
+          return {
+            destination,
+            knowledgeProject: project,
+            knowledgePage: page,
           };
         }
 

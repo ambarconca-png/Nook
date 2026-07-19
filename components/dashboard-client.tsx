@@ -42,6 +42,7 @@ import type {
   Project,
   Routine,
   Task,
+  TrackingTracker,
 } from "@/lib/types";
 
 type PageId = "today" | "inbox" | "todos" | "routines" | "tracking" | "projects";
@@ -189,6 +190,9 @@ export function DashboardClient({
   const [routineSaving, setRoutineSaving] = useState(false);
   const [routineError, setRoutineError] = useState("");
   const [inboxItems, setInboxItems] = useState(initialData.inboxItems);
+  const [trackingTrackers, setTrackingTrackers] = useState(
+    initialData.trackingTrackers,
+  );
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("nook-theme");
@@ -400,12 +404,15 @@ export function DashboardClient({
 
   async function organizeInboxItem(
     id: string,
-    destination: "todo" | "routine",
+    destination: "todo" | "routine" | "tracking" | "project",
   ) {
     const result = await dashboardAction<{
       task?: Task;
       routine?: Routine;
       area?: Area;
+      tracker?: TrackingTracker;
+      knowledgeProject?: KnowledgeProject;
+      knowledgePage?: KnowledgeProjectPage;
     }>({ action: "organize-inbox", id, destination });
 
     setInboxItems((current) => current.filter((item) => item.id !== id));
@@ -422,6 +429,25 @@ export function DashboardClient({
 
     if (result.routine) {
       setRoutines((current) => [...current, result.routine as Routine]);
+    }
+    if (result.tracker) {
+      setTrackingTrackers((current) =>
+        current.some((tracker) => tracker.id === result.tracker?.id)
+          ? current
+          : [...current, result.tracker as TrackingTracker],
+      );
+      setPage("tracking");
+    }
+    if (result.knowledgeProject && result.knowledgePage) {
+      setKnowledgeProjects((current) => [
+        ...current,
+        result.knowledgeProject as KnowledgeProject,
+      ]);
+      setKnowledgeProjectPages((current) => [
+        ...current,
+        result.knowledgePage as KnowledgeProjectPage,
+      ]);
+      setPage("projects");
     }
   }
 
@@ -1117,6 +1143,8 @@ export function DashboardClient({
                 title="Heute"
                 subtitle={`${todayTasks.filter((task) => !task.done).length} Aufgaben offen`}
                 icon={<ClipboardCheck size={19} />}
+                accent="blue"
+                onOpen={() => setPage("todos")}
                 action={
                   <button
                     onClick={() =>
@@ -1155,14 +1183,8 @@ export function DashboardClient({
                 title="Routinen"
                 subtitle="Diese Woche"
                 icon={<Repeat2 size={19} />}
-                action={
-                  <button
-                    onClick={() => openRoutineEditor()}
-                    className="text-sm text-nook-teal"
-                  >
-                    + Routine
-                  </button>
-                }
+                accent="green"
+                onOpen={() => setPage("routines")}
               >
                 <div className="space-y-1">
                   {routines.map((routine) => (
@@ -1174,12 +1196,9 @@ export function DashboardClient({
                     />
                   ))}
                   {routines.length === 0 && (
-                    <button
-                      onClick={() => openRoutineEditor()}
-                      className="w-full py-7 text-left text-sm leading-6 text-nook-muted"
-                    >
+                    <p className="w-full py-7 text-left text-sm leading-6 text-nook-muted">
                       Noch keine Routinen. Beginne mit etwas, das dir guttut.
-                    </button>
+                    </p>
                   )}
                 </div>
               </NookCard>
@@ -1188,14 +1207,8 @@ export function DashboardClient({
                 title="Tracking"
                 subtitle="Heute erfassen"
                 icon={<HeartPulse size={19} />}
-                action={
-                  <button
-                    onClick={() => setPage("tracking")}
-                    className="text-sm text-nook-teal"
-                  >
-                    Öffnen
-                  </button>
-                }
+                accent="pink"
+                onOpen={() => setPage("tracking")}
               >
                 <p className="py-7 text-sm leading-6 text-nook-muted">
                   Menstruation, Kopfschmerzen oder eigene Beobachtungen – ruhig,
@@ -1207,14 +1220,8 @@ export function DashboardClient({
                 title="Inbox"
                 subtitle={`${inboxItems.length} Einträge`}
                 icon={<Inbox size={19} />}
-                action={
-                  <button
-                    onClick={() => setPage("inbox")}
-                    className="text-sm text-nook-teal"
-                  >
-                    Öffnen
-                  </button>
-                }
+                accent="orange"
+                onOpen={() => setPage("inbox")}
               >
                 <div className="divide-y divide-black/5">
                   {inboxItems.slice(0, 3).map((item) => (
@@ -1565,7 +1572,7 @@ export function DashboardClient({
             }}
           >
             <TrackingWorkspace
-              initialTrackers={initialData.trackingTrackers}
+              initialTrackers={trackingTrackers}
               initialEntries={initialData.trackingEntries}
             />
           </PageHeading>
@@ -1850,10 +1857,8 @@ export function DashboardClient({
         )}
       </main>
 
-      <nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 rounded-[20px] border border-black/[0.08] bg-nook-card/88 p-2 shadow-nook backdrop-blur-2xl lg:hidden">
-        {navigation
-          .filter((item) => item.id !== "projects")
-          .map((item) => {
+      <nav className="fixed inset-x-2 bottom-2 z-40 grid grid-cols-6 rounded-[20px] border border-black/[0.08] bg-nook-card/88 p-1.5 shadow-nook backdrop-blur-2xl lg:hidden">
+        {navigation.map((item) => {
             const Icon = item.icon;
             const active = page === item.id;
             return (
@@ -1861,7 +1866,7 @@ export function DashboardClient({
                 key={item.id}
                 onClick={() => setPage(item.id)}
                 className={[
-                  "flex min-h-11 flex-col items-center justify-center gap-1 rounded-[14px] px-1 py-1.5 text-[11px]",
+                  "flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-[14px] px-0.5 py-1.5 text-[10px]",
                   active ? "bg-nook-teal/10 text-nook-teal" : "text-nook-muted",
                 ].join(" ")}
               >
