@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbfaf6"/>
+      <stop offset="1" stop-color="#f4ebe6"/>
+    </linearGradient>
+    <radialGradient id="peach" cx="0.78" cy="0.18" r="0.72">
+      <stop offset="0" stop-color="#e5a487" stop-opacity="0.82"/>
+      <stop offset="1" stop-color="#e5a487" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rose" cx="0.88" cy="0.7" r="0.62">
+      <stop offset="0" stop-color="#ce899e" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#ce899e" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="violet" cx="0.58" cy="0.82" r="0.58">
+      <stop offset="0" stop-color="#856fad" stop-opacity="0.58"/>
+      <stop offset="1" stop-color="#856fad" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="18"/></filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#base)"/>
+  <g filter="url(#blur)">
+    <path d="M256 10C376 2 492 60 506 173c14 115-75 130-81 238-5 82-121 103-188 43-70-62-28-125-76-192C115 198 147 18 256 10Z" fill="url(#peach)"/>
+    <path d="M340 117c111 24 177 151 105 235-50 59-127 15-194 74-57 50-146-17-122-93 30-95 107-87 126-159 11-41 41-66 85-57Z" fill="url(#rose)"/>
+    <path d="M178 255c53-52 157-43 191 23 29 57-17 96-9 155 7 47-66 71-102 36-46-45-29-93-83-119-42-20-31-62 3-95Z" fill="url(#violet)"/>
+  </g>
+  <circle cx="123" cy="123" r="34" fill="#fff" fill-opacity="0.7"/>
+  <text x="256" y="303" text-anchor="middle" fill="#20201f" font-family="Arial, Helvetica, sans-serif" font-size="156" font-weight="600" letter-spacing="-10">n</text>
+</svg>
