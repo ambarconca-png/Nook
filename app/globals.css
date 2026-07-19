@@ -160,19 +160,29 @@ textarea {
 
 .ink-cloud {
   position: absolute;
-  inset: 0 0 auto auto;
-  width: min(100%, 1480px);
-  height: min(78vh, 820px);
+  inset: 0;
+  width: 100%;
+  height: 100%;
   background-image: url("/assets/nook-ink-cloud.png");
-  background-position: right top;
+  background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
-  opacity: 0.82;
+  opacity: 0.76;
   mix-blend-mode: multiply;
   filter: var(--ink-filter);
   transform-origin: 78% 28%;
   animation: ink-breathe 34s ease-in-out infinite alternate;
   transition: filter 700ms ease, opacity 500ms ease;
+}
+
+.ink-cloud-secondary {
+  inset: 28% 0 0 -18%;
+  width: 92%;
+  height: 82%;
+  background-position: center;
+  opacity: 0.26;
+  transform: scaleX(-1) rotate(8deg);
+  animation: ink-drift-secondary 38s ease-in-out infinite alternate;
 }
 
 .smoke {
@@ -252,10 +262,24 @@ textarea {
   }
 }
 
+@keyframes ink-drift-secondary {
+  from {
+    transform: scaleX(-1) rotate(8deg) scale(1);
+  }
+  to {
+    transform: scaleX(-1) rotate(6deg) scale(1.035)
+      translate3d(-5px, 4px, 0);
+  }
+}
+
 .dark .ink-cloud {
   opacity: 0.28;
   mix-blend-mode: screen;
   filter: var(--ink-filter) contrast(1.08) brightness(0.82);
+}
+
+.dark .ink-cloud-secondary {
+  opacity: 0.18;
 }
 
 .dark [class*="bg-white/"],
@@ -282,10 +306,17 @@ textarea {
 
 @media (max-width: 1023px) {
   .ink-cloud {
-    width: 150%;
-    height: 520px;
-    background-position: 72% top;
-    opacity: 0.66;
+    width: 100%;
+    height: 100%;
+    background-position: 68% center;
+    opacity: 0.62;
+  }
+
+  .ink-cloud-secondary {
+    inset: 38% 0 0 -42%;
+    width: 145%;
+    height: 68%;
+    opacity: 0.2;
   }
 
   .smoke {
