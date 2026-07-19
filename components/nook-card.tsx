@@ -12,7 +12,7 @@ export function NookCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="group rounded-[20px] border border-black/[0.08] bg-nook-card/88 p-5 shadow-nook backdrop-blur-2xl transition duration-200 hover:-translate-y-0.5 hover:bg-nook-card sm:p-6">
+    <section className="group rounded-[22px] border border-white/80 bg-nook-card/76 p-5 shadow-nook backdrop-blur-2xl transition duration-200 hover:-translate-y-0.5 hover:bg-nook-card/88">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           {icon && (

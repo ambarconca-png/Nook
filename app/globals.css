@@ -19,6 +19,9 @@
   --smoke-teal: 85 189 178;
   --smoke-violet: 168 149 199;
   --smoke-peach: 229 164 135;
+  --smoke-primary: 229 164 135;
+  --smoke-secondary: 193 119 42;
+  --ink-filter: saturate(0.82) sepia(0.08);
 }
 
 html.dark {
@@ -41,31 +44,49 @@ html.dark {
 [data-module="today"] {
   --module-color: 40 125 121;
   --module-soft: 221 242 238;
+  --smoke-primary: 229 164 135;
+  --smoke-secondary: 193 119 42;
+  --ink-filter: sepia(0.2) saturate(0.9) hue-rotate(-8deg);
 }
 
 [data-module="todos"] {
   --module-color: 89 99 169;
   --module-soft: 230 237 248;
+  --smoke-primary: 98 139 199;
+  --smoke-secondary: 86 106 137;
+  --ink-filter: grayscale(0.55) sepia(0.12) saturate(0.75) hue-rotate(158deg);
 }
 
 [data-module="routines"] {
   --module-color: 95 142 104;
   --module-soft: 232 240 229;
+  --smoke-primary: 136 169 130;
+  --smoke-secondary: 95 142 104;
+  --ink-filter: grayscale(0.38) sepia(0.2) saturate(0.82) hue-rotate(58deg);
 }
 
 [data-module="tracking"] {
   --module-color: 206 137 158;
   --module-soft: 244 229 234;
+  --smoke-primary: 206 137 158;
+  --smoke-secondary: 229 164 135;
+  --ink-filter: saturate(0.92) hue-rotate(-8deg);
 }
 
 [data-module="projects"] {
   --module-color: 133 111 173;
   --module-soft: 236 231 244;
+  --smoke-primary: 168 149 199;
+  --smoke-secondary: 103 82 143;
+  --ink-filter: grayscale(0.18) saturate(0.86) hue-rotate(18deg);
 }
 
 [data-module="inbox"] {
-  --module-color: 105 105 100;
-  --module-soft: 240 240 236;
+  --module-color: 193 119 42;
+  --module-soft: 247 232 214;
+  --smoke-primary: 229 164 135;
+  --smoke-secondary: 193 119 42;
+  --ink-filter: sepia(0.24) saturate(0.92) hue-rotate(-10deg);
 }
 
 * {
@@ -131,9 +152,27 @@ textarea {
 
 .smoke-canvas {
   background:
-    radial-gradient(circle at 18% 18%, rgb(var(--smoke-teal) / 0.24), transparent 34%),
-    radial-gradient(circle at 77% 12%, rgb(var(--smoke-violet) / 0.18), transparent 31%),
-    radial-gradient(circle at 62% 68%, rgb(var(--smoke-peach) / 0.15), transparent 34%);
+    radial-gradient(circle at 82% 18%, rgb(var(--smoke-primary) / 0.22), transparent 34%),
+    radial-gradient(circle at 58% 42%, rgb(var(--smoke-secondary) / 0.12), transparent 38%),
+    rgb(var(--nook-background));
+  transition: background 700ms ease;
+}
+
+.ink-cloud {
+  position: absolute;
+  inset: 0 0 auto auto;
+  width: min(100%, 1480px);
+  height: min(78vh, 820px);
+  background-image: url("/assets/nook-ink-cloud.png");
+  background-position: right top;
+  background-repeat: no-repeat;
+  background-size: cover;
+  opacity: 0.82;
+  mix-blend-mode: multiply;
+  filter: var(--ink-filter);
+  transform-origin: 78% 28%;
+  animation: ink-breathe 34s ease-in-out infinite alternate;
+  transition: filter 700ms ease, opacity 500ms ease;
 }
 
 .smoke {
@@ -204,6 +243,21 @@ textarea {
   }
 }
 
+@keyframes ink-breathe {
+  from {
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.025) translate3d(4px, 3px, 0);
+  }
+}
+
+.dark .ink-cloud {
+  opacity: 0.28;
+  mix-blend-mode: screen;
+  filter: var(--ink-filter) contrast(1.08) brightness(0.82);
+}
+
 .dark [class*="bg-white/"],
 .dark .bg-white {
   background-color: rgb(var(--nook-card) / 0.88) !important;
@@ -227,6 +281,13 @@ textarea {
 }
 
 @media (max-width: 1023px) {
+  .ink-cloud {
+    width: 150%;
+    height: 520px;
+    background-position: 72% top;
+    opacity: 0.66;
+  }
+
   .smoke {
     opacity: 0.32;
     filter: blur(54px);

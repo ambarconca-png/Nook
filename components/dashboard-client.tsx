@@ -902,7 +902,7 @@ export function DashboardClient({
     >
       <SmokeBackground />
 
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-black/5 bg-nook-card/72 p-5 backdrop-blur-3xl lg:flex lg:flex-col">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-black/5 bg-nook-card/68 p-5 backdrop-blur-3xl lg:flex lg:flex-col">
         <div className="px-3 pb-8 pt-2 text-[30px] font-medium tracking-[-0.055em]">
           nook
         </div>
@@ -1022,10 +1022,10 @@ export function DashboardClient({
         </button>
       </div>
 
-      <main className="relative z-10 mx-auto max-w-[1120px] px-4 pb-28 pt-24 sm:px-6 lg:ml-60 lg:px-8 lg:pt-10 xl:px-12">
+      <main className="relative z-10 mx-auto max-w-[1080px] px-4 pb-28 pt-24 sm:px-6 lg:ml-60 lg:px-8 lg:pt-10 xl:px-12">
         {page === "today" && (
           <>
-            <section className="mb-10 min-h-36 rounded-[24px] bg-gradient-to-br from-nook-teal/10 via-white/20 to-nook-violet/10 px-6 py-8 backdrop-blur-sm lg:px-8 lg:py-10">
+            <section className="mb-8 min-h-36 px-1 pb-7 pt-8 lg:px-2 lg:pt-5">
               <h1 className="text-[28px] font-semibold leading-[1.2] tracking-[-0.035em] lg:text-[32px]">
                 {greeting}, {displayName}.
               </h1>
