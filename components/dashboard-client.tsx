@@ -12,6 +12,7 @@ import {
   Inbox,
   LogOut,
   Menu,
+  Pencil,
   Plus,
   Repeat2,
   Search,
@@ -61,9 +62,22 @@ export function DashboardClient({
   const [editTaskTitle, setEditTaskTitle] = useState("");
   const [editTaskAreaId, setEditTaskAreaId] = useState("");
   const [editTaskProjectId, setEditTaskProjectId] = useState("");
-  const [editTaskDueToday, setEditTaskDueToday] = useState(false);
+  const [editTaskDueDate, setEditTaskDueDate] = useState("");
+  const [editTaskPriority, setEditTaskPriority] =
+    useState<Task["priority"]>("none");
+  const [editTaskNotes, setEditTaskNotes] = useState("");
+  const [editTaskRecurrence, setEditTaskRecurrence] =
+    useState<Task["recurrence"]>("none");
   const [editTaskError, setEditTaskError] = useState("");
   const [editTaskSaving, setEditTaskSaving] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editProjectTitle, setEditProjectTitle] = useState("");
+  const [editProjectAreaId, setEditProjectAreaId] = useState("");
+  const [editProjectDescription, setEditProjectDescription] = useState("");
+  const [editProjectEndDate, setEditProjectEndDate] = useState("");
+  const [editProjectNotes, setEditProjectNotes] = useState("");
+  const [editProjectError, setEditProjectError] = useState("");
+  const [editProjectSaving, setEditProjectSaving] = useState(false);
 
   const [areas, setAreas] = useState(initialData.areas);
   const [projects, setProjects] = useState(initialData.projects);
@@ -120,7 +134,10 @@ export function DashboardClient({
     setEditTaskTitle(task.title);
     setEditTaskAreaId(task.areaId);
     setEditTaskProjectId(task.projectId ?? "");
-    setEditTaskDueToday(task.dueToday);
+    setEditTaskDueDate(task.dueDate ?? "");
+    setEditTaskPriority(task.priority);
+    setEditTaskNotes(task.notes);
+    setEditTaskRecurrence(task.recurrence);
     setEditTaskError("");
   }
 
@@ -139,7 +156,10 @@ export function DashboardClient({
         title: editTaskTitle,
         areaId: editTaskAreaId,
         projectId: editTaskProjectId || undefined,
-        dueToday: editTaskDueToday,
+        dueDate: editTaskDueDate || undefined,
+        priority: editTaskPriority,
+        notes: editTaskNotes,
+        recurrence: editTaskRecurrence,
       });
       setTasks((current) =>
         current.map((task) =>
@@ -298,6 +318,7 @@ export function DashboardClient({
         ...current,
         { ...result.task, projectId },
       ]);
+      openTaskEditor({ ...result.task, projectId });
       if (!areas.some((area) => area.id === result.task.areaId)) {
         setAreas((current) => [
           ...current,
@@ -341,12 +362,65 @@ export function DashboardClient({
         title,
       });
       setProjects((current) => [...current, result.project]);
+      openProjectEditor(result.project);
     } catch (error) {
       window.alert(
         error instanceof Error
           ? error.message
           : "Projekt konnte nicht gespeichert werden.",
       );
+    }
+  }
+
+  function openProjectEditor(project: Project) {
+    setEditingProject(project);
+    setEditProjectTitle(project.title);
+    setEditProjectAreaId(project.areaId ?? "");
+    setEditProjectDescription(project.description);
+    setEditProjectEndDate(project.endDate ?? "");
+    setEditProjectNotes(project.notes);
+    setEditProjectError("");
+  }
+
+  async function saveProjectEdit() {
+    if (!editingProject || !editProjectTitle.trim()) {
+      setEditProjectError("Bitte gib dem Projekt einen Titel.");
+      return;
+    }
+
+    setEditProjectSaving(true);
+    setEditProjectError("");
+    try {
+      const result = await dashboardAction<{ project: Project }>({
+        action: "update-task-project",
+        id: editingProject.id,
+        title: editProjectTitle,
+        areaId: editProjectAreaId,
+        description: editProjectDescription,
+        endDate: editProjectEndDate || undefined,
+        notes: editProjectNotes,
+      });
+      setProjects((current) =>
+        current.map((project) =>
+          project.id === editingProject.id ? result.project : project,
+        ),
+      );
+      setTasks((current) =>
+        current.map((task) =>
+          task.projectId === editingProject.id
+            ? { ...task, areaId: result.project.areaId ?? task.areaId }
+            : task,
+        ),
+      );
+      setEditingProject(null);
+    } catch (error) {
+      setEditProjectError(
+        error instanceof Error
+          ? error.message
+          : "Projekt konnte nicht gespeichert werden.",
+      );
+    } finally {
+      setEditProjectSaving(false);
     }
   }
 
@@ -746,9 +820,23 @@ export function DashboardClient({
                         key={project.id}
                         className="mt-5 border-t border-black/5 pt-5"
                       >
-                        <div className="mb-2 flex items-center justify-between">
+                        <div className="mb-2 flex items-start justify-between gap-4">
                           <div>
-                            <h3 className="font-medium">{project.title}</h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-medium">{project.title}</h3>
+                              <button
+                                onClick={() => openProjectEditor(project)}
+                                className="grid h-7 w-7 place-items-center rounded-full text-nook-muted transition hover:bg-black/5 hover:text-nook-ink"
+                                aria-label={`${project.title} bearbeiten`}
+                              >
+                                <Pencil size={14} strokeWidth={1.8} />
+                              </button>
+                            </div>
+                            {project.description && (
+                              <p className="mt-1 max-w-2xl text-sm leading-6 text-nook-muted">
+                                {project.description}
+                              </p>
+                            )}
                             <p className="mt-1 text-xs text-nook-muted">
                               {
                                 tasks.filter(
@@ -756,6 +844,9 @@ export function DashboardClient({
                                 ).length
                               }{" "}
                               Aufgaben
+                              {project.endDate
+                                ? ` · bis ${new Intl.DateTimeFormat("de-CH").format(new Date(`${project.endDate}T12:00:00`))}`
+                                : ""}
                             </p>
                           </div>
                           <button
@@ -854,16 +945,89 @@ export function DashboardClient({
         {page === "projects" && (
           <PageHeading
             title="Projekte"
-            subtitle="Notizen, Wissen und Materialien."
+            subtitle="Ziele, Gedanken und die nächsten Schritte."
             buttonLabel="Projekt"
-            onButton={() => addProject()}
+            onButton={() => {
+              if (areas[0]) addProject(areas[0].id);
+              else addArea();
+            }}
           >
-            <NookCard title="Platz für Wissen, das bleiben darf">
-              <p className="max-w-xl py-6 leading-7 text-nook-muted">
-                Wissensprojekte mit Notizen, Checklisten, Dateien, Bildern und
-                Links folgen als eigener Nook-Baustein.
-              </p>
-            </NookCard>
+            <div className="grid gap-5 md:grid-cols-2">
+              {projects.map((project) => {
+                const projectTasks = tasks.filter(
+                  (task) => task.projectId === project.id,
+                );
+                return (
+                  <NookCard
+                    key={project.id}
+                    title={project.title}
+                    subtitle={
+                      project.endDate
+                        ? `Enddatum ${new Intl.DateTimeFormat("de-CH").format(new Date(`${project.endDate}T12:00:00`))}`
+                        : "Ohne Enddatum"
+                    }
+                    action={
+                      <button
+                        onClick={() => openProjectEditor(project)}
+                        className="flex items-center gap-2 text-sm text-nook-violet"
+                      >
+                        <Pencil size={14} />
+                        Bearbeiten
+                      </button>
+                    }
+                  >
+                    {project.description && (
+                      <p className="pb-4 text-sm leading-6 text-nook-muted">
+                        {project.description}
+                      </p>
+                    )}
+                    <div className="border-t border-black/5 pt-3">
+                      <p className="mb-1 text-xs font-medium uppercase tracking-[0.16em] text-nook-muted">
+                        Zugehörige To-dos
+                      </p>
+                      <div className="divide-y divide-black/5">
+                        {projectTasks.map((task) => (
+                          <TaskRow
+                            key={task.id}
+                            task={task}
+                            area={areas.find(
+                              (area) => area.id === task.areaId,
+                            )}
+                            project={project}
+                            onToggle={() => toggleTask(task.id)}
+                            onEdit={() => openTaskEditor(task)}
+                            onDelete={() => deleteTask(task)}
+                          />
+                        ))}
+                        {projectTasks.length === 0 && (
+                          <p className="py-4 text-sm text-nook-muted">
+                            Noch keine To-dos in diesem Projekt.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {project.notes && (
+                      <div className="mt-3 rounded-[18px] bg-white/55 px-4 py-3">
+                        <p className="text-xs font-medium uppercase tracking-[0.14em] text-nook-muted">
+                          Notizen
+                        </p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
+                          {project.notes}
+                        </p>
+                      </div>
+                    )}
+                  </NookCard>
+                );
+              })}
+              {projects.length === 0 && (
+                <NookCard title="Dein erstes Projekt">
+                  <p className="max-w-xl py-6 leading-7 text-nook-muted">
+                    Bündle ein Ziel mit Beschreibung, Enddatum, Notizen und
+                    den Aufgaben, die dich dorthin führen.
+                  </p>
+                </NookCard>
+              )}
+            </div>
           </PageHeading>
         )}
       </main>
@@ -957,12 +1121,12 @@ export function DashboardClient({
 
       {editingTask && (
         <div
-          className="fixed inset-0 z-[60] grid place-items-center bg-black/25 p-4 backdrop-blur-md"
+          className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-black/25 p-4 backdrop-blur-md"
           onMouseDown={(event) => {
             if (event.currentTarget === event.target) setEditingTask(null);
           }}
         >
-          <div className="w-full max-w-lg rounded-[28px] bg-nook-card p-6 shadow-nook">
+          <div className="my-4 w-full max-w-lg rounded-[28px] bg-nook-card p-6 shadow-nook">
             <div className="mb-5 flex items-start justify-between">
               <div>
                 <h2 className="text-2xl font-semibold tracking-[-0.03em]">
@@ -1032,14 +1196,60 @@ export function DashboardClient({
               </label>
             </div>
 
-            <label className="mt-5 flex cursor-pointer items-center gap-3 rounded-[18px] bg-white/65 px-4 py-3 text-sm">
-              <input
-                type="checkbox"
-                checked={editTaskDueToday}
-                onChange={(event) => setEditTaskDueToday(event.target.checked)}
-                className="h-4 w-4 accent-nook-teal"
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium">
+                Fälligkeitsdatum
+                <input
+                  type="date"
+                  value={editTaskDueDate}
+                  onChange={(event) => setEditTaskDueDate(event.target.value)}
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+                />
+              </label>
+
+              <label className="block text-sm font-medium">
+                Priorität
+                <select
+                  value={editTaskPriority}
+                  onChange={(event) =>
+                    setEditTaskPriority(event.target.value as Task["priority"])
+                  }
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+                >
+                  <option value="none">Keine</option>
+                  <option value="low">Niedrig</option>
+                  <option value="medium">Mittel</option>
+                  <option value="high">Hoch</option>
+                </select>
+              </label>
+            </div>
+
+            <label className="mt-4 block text-sm font-medium">
+              Wiederholung
+              <select
+                value={editTaskRecurrence}
+                onChange={(event) =>
+                  setEditTaskRecurrence(
+                    event.target.value as Task["recurrence"],
+                  )
+                }
+                className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+              >
+                <option value="none">Keine Wiederholung</option>
+                <option value="daily">Täglich</option>
+                <option value="weekly">Wöchentlich</option>
+                <option value="monthly">Monatlich</option>
+              </select>
+            </label>
+
+            <label className="mt-4 block text-sm font-medium">
+              Notizen
+              <textarea
+                value={editTaskNotes}
+                onChange={(event) => setEditTaskNotes(event.target.value)}
+                className="mt-2 min-h-24 w-full resize-y rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none transition focus:border-nook-teal focus:ring-4 focus:ring-nook-teal/10"
+                placeholder="Details, Gedanken oder hilfreiche Hinweise …"
               />
-              Auf „Heute“ anzeigen
             </label>
 
             {editTaskError && (
@@ -1068,6 +1278,121 @@ export function DashboardClient({
                   {editTaskSaving ? "Speichert …" : "Speichern"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingProject && (
+        <div
+          className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-black/25 p-4 backdrop-blur-md"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setEditingProject(null);
+          }}
+        >
+          <div className="my-4 w-full max-w-xl rounded-[28px] bg-nook-card p-6 shadow-nook">
+            <div className="mb-5 flex items-start justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-[-0.03em]">
+                  Projekt bearbeiten
+                </h2>
+                <p className="mt-1 text-sm text-nook-muted">
+                  Ein ruhiger Ort für Ziel, Aufgaben und Gedanken.
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingProject(null)}
+                className="grid h-9 w-9 place-items-center rounded-full bg-black/5"
+                aria-label="Schließen"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <label className="block text-sm font-medium">
+              Titel
+              <input
+                autoFocus
+                value={editProjectTitle}
+                onChange={(event) => setEditProjectTitle(event.target.value)}
+                className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal focus:ring-4 focus:ring-nook-teal/10"
+              />
+            </label>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium">
+                Bereich
+                <select
+                  value={editProjectAreaId}
+                  onChange={(event) => setEditProjectAreaId(event.target.value)}
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+                >
+                  {areas.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm font-medium">
+                Enddatum
+                <input
+                  type="date"
+                  value={editProjectEndDate}
+                  onChange={(event) => setEditProjectEndDate(event.target.value)}
+                  className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal"
+                />
+              </label>
+            </div>
+
+            <label className="mt-4 block text-sm font-medium">
+              Beschreibung
+              <textarea
+                value={editProjectDescription}
+                onChange={(event) =>
+                  setEditProjectDescription(event.target.value)
+                }
+                className="mt-2 min-h-24 w-full resize-y rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal focus:ring-4 focus:ring-nook-teal/10"
+                placeholder="Worum geht es in diesem Projekt?"
+              />
+            </label>
+
+            <label className="mt-4 block text-sm font-medium">
+              Notizen
+              <textarea
+                value={editProjectNotes}
+                onChange={(event) => setEditProjectNotes(event.target.value)}
+                className="mt-2 min-h-28 w-full resize-y rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-teal focus:ring-4 focus:ring-nook-teal/10"
+                placeholder="Gedanken, Entscheidungen oder wichtige Details …"
+              />
+            </label>
+
+            <p className="mt-4 rounded-[18px] bg-white/60 px-4 py-3 text-sm text-nook-muted">
+              {
+                tasks.filter((task) => task.projectId === editingProject.id)
+                  .length
+              }{" "}
+              zugehörige To-dos bleiben direkt im Projekt sichtbar.
+            </p>
+
+            {editProjectError && (
+              <p className="mt-3 text-sm text-rose-700">{editProjectError}</p>
+            )}
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setEditingProject(null)}
+                className="rounded-2xl bg-black/5 px-4 py-2.5 text-sm"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={saveProjectEdit}
+                disabled={editProjectSaving}
+                className="rounded-2xl bg-nook-teal px-4 py-2.5 text-sm text-white disabled:cursor-wait disabled:opacity-60"
+              >
+                {editProjectSaving ? "Speichert …" : "Speichern"}
+              </button>
             </div>
           </div>
         </div>

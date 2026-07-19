@@ -18,6 +18,23 @@ function cleanText(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
+function cleanDate(value: unknown) {
+  const date = cleanText(value, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+}
+
+function cleanPriority(value: unknown) {
+  const priority = cleanText(value, 10);
+  return ["low", "medium", "high"].includes(priority) ? priority : "none";
+}
+
+function cleanRecurrence(value: unknown) {
+  const recurrence = cleanText(value, 10);
+  return ["daily", "weekly", "monthly"].includes(recurrence)
+    ? recurrence
+    : "none";
+}
+
 function currentWeekBounds() {
   const today = localDate();
   const date = new Date(`${today}T12:00:00Z`);
@@ -197,6 +214,10 @@ export async function POST(request: Request) {
               title: task.title,
               areaId: task.areaId ?? "",
               dueToday: true,
+              dueDate: localDate(),
+              priority: "none",
+              notes: "",
+              recurrence: "none",
               done: false,
             },
           };
@@ -260,6 +281,10 @@ export async function POST(request: Request) {
       let areaId = cleanText(body.areaId, 50) || null;
       let projectId = cleanText(body.projectId, 50) || null;
       const dueToday = body.dueToday === true;
+      const dueDate = cleanDate(body.dueDate) ?? (dueToday ? localDate() : null);
+      const priority = cleanPriority(body.priority);
+      const notes = cleanText(body.notes, 5000);
+      const recurrence = cleanRecurrence(body.recurrence);
       if (!title) {
         return NextResponse.json(
           { error: "Bitte gib eine Aufgabe ein." },
@@ -323,13 +348,20 @@ export async function POST(request: Request) {
           areaId,
           projectId,
           title,
-          dueDate: dueToday ? localDate() : null,
+          dueDate,
+          priority,
+          notes,
+          recurrence,
         })
         .returning({
           id: tasks.id,
           title: tasks.title,
           areaId: tasks.areaId,
           projectId: tasks.projectId,
+          dueDate: tasks.dueDate,
+          priority: tasks.priority,
+          notes: tasks.notes,
+          recurrence: tasks.recurrence,
         });
 
       return NextResponse.json({
@@ -338,7 +370,11 @@ export async function POST(request: Request) {
           title: task.title,
           areaId: task.areaId ?? "",
           projectId: task.projectId ?? undefined,
-          dueToday,
+          dueDate: task.dueDate ?? undefined,
+          dueToday: task.dueDate === localDate(),
+          priority: task.priority,
+          notes: task.notes,
+          recurrence: task.recurrence,
           done: false,
         },
       });
@@ -347,6 +383,9 @@ export async function POST(request: Request) {
     if (action === "create-task-project") {
       const title = cleanText(body.title, 160);
       const areaId = cleanText(body.areaId, 50);
+      const description = cleanText(body.description, 3000);
+      const endDate = cleanDate(body.endDate);
+      const notes = cleanText(body.notes, 10000);
       if (!title || !areaId) {
         return NextResponse.json(
           { error: "Projektname und Bereich werden benötigt." },
@@ -368,14 +407,80 @@ export async function POST(request: Request) {
 
       const [project] = await db
         .insert(taskProjects)
-        .values({ userId: user.id, areaId, title })
+        .values({ userId: user.id, areaId, title, description, endDate, notes })
         .returning({
           id: taskProjects.id,
           title: taskProjects.title,
           areaId: taskProjects.areaId,
+          description: taskProjects.description,
+          endDate: taskProjects.endDate,
+          notes: taskProjects.notes,
         });
 
-      return NextResponse.json({ project: { ...project, note: "" } });
+      return NextResponse.json({
+        project: { ...project, endDate: project.endDate ?? undefined },
+      });
+    }
+
+    if (action === "update-task-project") {
+      const id = cleanText(body.id, 50);
+      const title = cleanText(body.title, 160);
+      const areaId = cleanText(body.areaId, 50);
+      const description = cleanText(body.description, 3000);
+      const endDate = cleanDate(body.endDate);
+      const notes = cleanText(body.notes, 10000);
+
+      if (!title || !areaId) {
+        return NextResponse.json(
+          { error: "Projektname und Bereich werden benötigt." },
+          { status: 400 },
+        );
+      }
+
+      const [ownedArea] = await db
+        .select({ id: areas.id })
+        .from(areas)
+        .where(and(eq(areas.id, areaId), eq(areas.userId, user.id)))
+        .limit(1);
+      if (!ownedArea) {
+        return NextResponse.json(
+          { error: "Bereich nicht gefunden." },
+          { status: 404 },
+        );
+      }
+
+      const [project] = await db
+        .update(taskProjects)
+        .set({ title, areaId, description, endDate, notes })
+        .where(
+          and(eq(taskProjects.id, id), eq(taskProjects.userId, user.id)),
+        )
+        .returning({
+          id: taskProjects.id,
+          title: taskProjects.title,
+          areaId: taskProjects.areaId,
+          description: taskProjects.description,
+          endDate: taskProjects.endDate,
+          notes: taskProjects.notes,
+        });
+
+      if (!project) {
+        return NextResponse.json(
+          { error: "Projekt nicht gefunden." },
+          { status: 404 },
+        );
+      }
+
+      await db
+        .update(tasks)
+        .set({ areaId })
+        .where(
+          and(eq(tasks.projectId, project.id), eq(tasks.userId, user.id)),
+        );
+
+      return NextResponse.json({
+        project: { ...project, endDate: project.endDate ?? undefined },
+      });
     }
 
     if (action === "update-task") {
@@ -383,7 +488,10 @@ export async function POST(request: Request) {
       const title = cleanText(body.title, 240);
       let areaId = cleanText(body.areaId, 50);
       let projectId = cleanText(body.projectId, 50) || null;
-      const dueToday = body.dueToday === true;
+      const dueDate = cleanDate(body.dueDate);
+      const priority = cleanPriority(body.priority);
+      const notes = cleanText(body.notes, 5000);
+      const recurrence = cleanRecurrence(body.recurrence);
 
       if (!title) {
         return NextResponse.json(
@@ -445,7 +553,10 @@ export async function POST(request: Request) {
           title,
           areaId,
           projectId,
-          dueDate: dueToday ? localDate() : null,
+          dueDate,
+          priority,
+          notes,
+          recurrence,
         })
         .where(and(eq(tasks.id, id), eq(tasks.userId, user.id)))
         .returning({
@@ -453,6 +564,10 @@ export async function POST(request: Request) {
           title: tasks.title,
           areaId: tasks.areaId,
           projectId: tasks.projectId,
+          dueDate: tasks.dueDate,
+          priority: tasks.priority,
+          notes: tasks.notes,
+          recurrence: tasks.recurrence,
           completedAt: tasks.completedAt,
         });
 
@@ -462,7 +577,11 @@ export async function POST(request: Request) {
           title: task.title,
           areaId: task.areaId ?? "",
           projectId: task.projectId ?? undefined,
-          dueToday,
+          dueDate: task.dueDate ?? undefined,
+          dueToday: task.dueDate === localDate(),
+          priority: task.priority,
+          notes: task.notes,
+          recurrence: task.recurrence,
           done: Boolean(task.completedAt),
         },
       });

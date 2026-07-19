@@ -16,6 +16,23 @@ export function TaskRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const details = [
+    area?.name,
+    project?.title,
+    task.dueDate
+      ? `fällig ${new Intl.DateTimeFormat("de-CH").format(
+          new Date(`${task.dueDate}T12:00:00`),
+        )}`
+      : "",
+    task.priority === "high"
+      ? "hohe Priorität"
+      : task.priority === "medium"
+        ? "mittlere Priorität"
+        : task.priority === "low"
+          ? "niedrige Priorität"
+          : "",
+  ].filter(Boolean);
+
   return (
     <div className="flex items-center gap-3 py-3">
       <button
@@ -40,10 +57,9 @@ export function TaskRow({
         >
           {task.title}
         </p>
-        {(area || project) && (
+        {details.length > 0 && (
           <p className="mt-1 truncate text-xs text-nook-muted">
-            {area?.name}
-            {project ? ` · ${project.title}` : ""}
+            {details.join(" · ")}
           </p>
         )}
       </div>

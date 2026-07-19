@@ -63,6 +63,9 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
           id: taskProjects.id,
           title: taskProjects.title,
           areaId: taskProjects.areaId,
+          description: taskProjects.description,
+          endDate: taskProjects.endDate,
+          notes: taskProjects.notes,
         })
         .from(taskProjects)
         .where(eq(taskProjects.userId, userId))
@@ -74,6 +77,9 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
           areaId: tasks.areaId,
           projectId: tasks.projectId,
           dueDate: tasks.dueDate,
+          priority: tasks.priority,
+          notes: tasks.notes,
+          recurrence: tasks.recurrence,
           completedAt: tasks.completedAt,
         })
         .from(tasks)
@@ -114,13 +120,24 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
 
   return {
     areas: areaRows,
-    projects: projectRows.map((project) => ({ ...project, note: "" })),
+    projects: projectRows.map((project) => ({
+      ...project,
+      endDate: project.endDate ?? undefined,
+    })),
     tasks: taskRows.map((task) => ({
       id: task.id,
       title: task.title,
       areaId: task.areaId ?? "",
       projectId: task.projectId ?? undefined,
+      dueDate: task.dueDate ?? undefined,
       dueToday: task.dueDate === today,
+      priority: ["low", "medium", "high"].includes(task.priority)
+        ? (task.priority as Task["priority"])
+        : "none",
+      notes: task.notes,
+      recurrence: ["daily", "weekly", "monthly"].includes(task.recurrence)
+        ? (task.recurrence as Task["recurrence"])
+        : "none",
       done: Boolean(task.completedAt),
     })),
     routines: routineRows,

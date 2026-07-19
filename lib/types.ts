@@ -7,7 +7,9 @@ export type Project = {
   id: string;
   title: string;
   areaId?: string;
-  note: string;
+  description: string;
+  endDate?: string;
+  notes: string;
 };
 
 export type Task = {
@@ -15,7 +17,11 @@ export type Task = {
   title: string;
   areaId: string;
   projectId?: string;
+  dueDate?: string;
   dueToday: boolean;
+  priority: "none" | "low" | "medium" | "high";
+  notes: string;
+  recurrence: "none" | "daily" | "weekly" | "monthly";
   done: boolean;
 };
 

@@ -67,6 +67,9 @@ export const taskProjects = pgTable(
       .notNull()
       .references(() => areas.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    endDate: date("end_date"),
+    notes: text("notes").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -92,6 +95,9 @@ export const tasks = pgTable(
     }),
     title: text("title").notNull(),
     dueDate: date("due_date"),
+    priority: text("priority").notNull().default("none"),
+    notes: text("notes").notNull().default(""),
+    recurrence: text("recurrence").notNull().default("none"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
