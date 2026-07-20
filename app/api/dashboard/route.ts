@@ -545,6 +545,82 @@ export async function POST(request: Request) {
       return NextResponse.json({ area });
     }
 
+    if (action === "reorder-items") {
+      const kind = cleanText(body.kind, 40);
+      const ids = Array.isArray(body.ids)
+        ? body.ids
+            .map((id) => cleanText(id, 50))
+            .filter(Boolean)
+            .slice(0, 500)
+        : [];
+      if (ids.length === 0) {
+        return NextResponse.json(
+          { error: "Keine Elemente zum Verschieben gefunden." },
+          { status: 400 },
+        );
+      }
+
+      await db.transaction(async (tx) => {
+        for (const [position, id] of ids.entries()) {
+          if (kind === "areas") {
+            await tx
+              .update(areas)
+              .set({ position })
+              .where(and(eq(areas.id, id), eq(areas.userId, user.id)));
+          } else if (kind === "task-projects") {
+            await tx
+              .update(taskProjects)
+              .set({ position })
+              .where(
+                and(
+                  eq(taskProjects.id, id),
+                  eq(taskProjects.userId, user.id),
+                ),
+              );
+          } else if (kind === "tasks") {
+            await tx
+              .update(tasks)
+              .set({ position })
+              .where(and(eq(tasks.id, id), eq(tasks.userId, user.id)));
+          } else if (kind === "knowledge-projects") {
+            await tx
+              .update(knowledgeProjects)
+              .set({ position })
+              .where(
+                and(
+                  eq(knowledgeProjects.id, id),
+                  eq(knowledgeProjects.userId, user.id),
+                ),
+              );
+          } else if (kind === "knowledge-pages") {
+            await tx
+              .update(knowledgeProjectPages)
+              .set({ position })
+              .where(
+                and(
+                  eq(knowledgeProjectPages.id, id),
+                  eq(knowledgeProjectPages.userId, user.id),
+                ),
+              );
+          } else if (kind === "knowledge-blocks") {
+            await tx
+              .update(knowledgeProjectBlocks)
+              .set({ position })
+              .where(
+                and(
+                  eq(knowledgeProjectBlocks.id, id),
+                  eq(knowledgeProjectBlocks.userId, user.id),
+                ),
+              );
+          } else {
+            throw new Error("Unbekannte Sortierebene.");
+          }
+        }
+      });
+
+      return NextResponse.json({ ids });
+    }
+
     if (action === "update-area") {
       const id = cleanText(body.id, 50);
       const name = cleanText(body.name, 80);

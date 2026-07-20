@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Link2, ListChecks, Plus, Table2, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Link2,
+  ListChecks,
+  Plus,
+  Table2,
+  Trash2,
+} from "lucide-react";
 import type { KnowledgeProjectBlock } from "@/lib/types";
 
 type ChecklistContent = {
@@ -30,10 +38,14 @@ export function KnowledgeProjectBlockCard({
   block,
   onUpdate,
   onDelete,
+  onMoveUp,
+  onMoveDown,
 }: {
   block: KnowledgeProjectBlock;
   onUpdate: (block: KnowledgeProjectBlock) => Promise<void>;
   onDelete: (block: KnowledgeProjectBlock) => Promise<void>;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   const [title, setTitle] = useState(block.title);
   const [saving, setSaving] = useState(false);
@@ -85,6 +97,24 @@ export function KnowledgeProjectBlockCard({
           className="min-w-0 flex-1 bg-transparent font-medium outline-none"
           aria-label="Blocktitel"
         />
+        {onMoveUp && (
+          <button
+            onClick={onMoveUp}
+            className="grid h-8 w-8 place-items-center rounded-full text-nook-muted hover:bg-black/5"
+            aria-label={`${block.title} nach oben verschieben`}
+          >
+            <ChevronUp size={14} />
+          </button>
+        )}
+        {onMoveDown && (
+          <button
+            onClick={onMoveDown}
+            className="grid h-8 w-8 place-items-center rounded-full text-nook-muted hover:bg-black/5"
+            aria-label={`${block.title} nach unten verschieben`}
+          >
+            <ChevronDown size={14} />
+          </button>
+        )}
         <button
           onClick={() => onDelete(block)}
           className="grid h-8 w-8 place-items-center rounded-full text-nook-muted transition hover:bg-rose-50 hover:text-rose-700"
@@ -130,6 +160,42 @@ export function KnowledgeProjectBlockCard({
                 ].join(" ")}
                 placeholder="Punkt hinzufügen …"
               />
+              {index > 0 && (
+                <button
+                  onClick={() => {
+                    const items = [...checklist.items];
+                    [items[index - 1], items[index]] = [
+                      items[index],
+                      items[index - 1],
+                    ];
+                    const next = { items };
+                    setChecklist(next);
+                    void save(next);
+                  }}
+                  className="grid h-8 w-8 place-items-center rounded-full text-nook-muted hover:bg-black/5"
+                  aria-label="Checklistenpunkt nach oben verschieben"
+                >
+                  <ChevronUp size={14} />
+                </button>
+              )}
+              {index < checklist.items.length - 1 && (
+                <button
+                  onClick={() => {
+                    const items = [...checklist.items];
+                    [items[index], items[index + 1]] = [
+                      items[index + 1],
+                      items[index],
+                    ];
+                    const next = { items };
+                    setChecklist(next);
+                    void save(next);
+                  }}
+                  className="grid h-8 w-8 place-items-center rounded-full text-nook-muted hover:bg-black/5"
+                  aria-label="Checklistenpunkt nach unten verschieben"
+                >
+                  <ChevronDown size={14} />
+                </button>
+              )}
               <button
                 onClick={() =>
                   setChecklist((current) => ({

@@ -1,6 +1,7 @@
 export type Area = {
   id: string;
   name: string;
+  position?: number;
 };
 
 export type Project = {
@@ -10,6 +11,7 @@ export type Project = {
   description: string;
   endDate?: string;
   notes: string;
+  position?: number;
 };
 
 export type KnowledgeProject = {
@@ -17,6 +19,7 @@ export type KnowledgeProject = {
   title: string;
   description: string;
   status: "idea" | "active" | "paused" | "complete";
+  position?: number;
 };
 
 export type KnowledgeProjectPage = {
@@ -24,7 +27,7 @@ export type KnowledgeProjectPage = {
   projectId: string;
   title: string;
   content: string;
-  position: number;
+  position?: number;
 };
 
 export type KnowledgeProjectBlock = {
@@ -33,7 +36,7 @@ export type KnowledgeProjectBlock = {
   type: "checklist" | "link" | "table";
   title: string;
   content: string;
-  position: number;
+  position?: number;
 };
 
 export type Task = {
@@ -47,6 +50,7 @@ export type Task = {
   notes: string;
   recurrence: "none" | "daily" | "weekly" | "monthly";
   done: boolean;
+  position?: number;
 };
 
 export type Routine = {

@@ -1,4 +1,4 @@
-import { Check, Pencil, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
 import type { Area, Project, Task } from "@/lib/types";
 
 export function TaskRow({
@@ -8,6 +8,8 @@ export function TaskRow({
   onToggle,
   onEdit,
   onDelete,
+  onMoveUp,
+  onMoveDown,
 }: {
   task: Task;
   area?: Area;
@@ -15,6 +17,8 @@ export function TaskRow({
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   const details = [
     area?.name,
@@ -65,6 +69,24 @@ export function TaskRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        {onMoveUp && (
+          <button
+            onClick={onMoveUp}
+            className="grid h-8 w-8 place-items-center rounded-full text-nook-muted transition hover:bg-black/5 hover:text-nook-ink"
+            aria-label={`${task.title} nach oben verschieben`}
+          >
+            <ChevronUp size={14} />
+          </button>
+        )}
+        {onMoveDown && (
+          <button
+            onClick={onMoveDown}
+            className="grid h-8 w-8 place-items-center rounded-full text-nook-muted transition hover:bg-black/5 hover:text-nook-ink"
+            aria-label={`${task.title} nach unten verschieben`}
+          >
+            <ChevronDown size={14} />
+          </button>
+        )}
         <button
           onClick={onEdit}
           className="grid h-8 w-8 place-items-center rounded-full text-nook-muted transition hover:bg-black/5 hover:text-nook-ink"

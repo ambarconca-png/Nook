@@ -7,6 +7,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  ChevronUp,
   ClipboardCheck,
   FolderKanban,
   FileText,
@@ -127,6 +128,41 @@ function zurichDateKey(value: string | Date) {
     month: "2-digit",
     day: "2-digit",
   }).format(typeof value === "string" ? new Date(value) : value);
+}
+
+function OrderControls({
+  label,
+  first,
+  last,
+  onMoveUp,
+  onMoveDown,
+}: {
+  label: string;
+  first: boolean;
+  last: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-0.5">
+      <button
+        onClick={onMoveUp}
+        disabled={first}
+        className="grid h-8 w-8 place-items-center rounded-full text-nook-muted transition hover:bg-black/5 hover:text-nook-ink disabled:opacity-25"
+        aria-label={`${label} nach oben verschieben`}
+      >
+        <ChevronUp size={15} />
+      </button>
+      <button
+        onClick={onMoveDown}
+        disabled={last}
+        className="grid h-8 w-8 place-items-center rounded-full text-nook-muted transition hover:bg-black/5 hover:text-nook-ink disabled:opacity-25"
+        aria-label={`${label} nach unten verschieben`}
+      >
+        <ChevronDown size={15} />
+      </button>
+    </div>
+  );
 }
 
 export function DashboardClient({
@@ -311,6 +347,43 @@ export function DashboardClient({
       throw new Error(result.error ?? "Änderung konnte nicht gespeichert werden.");
     }
     return result;
+  }
+
+  function moveOrderedItem<T extends { id: string; position?: number }>(
+    allItems: T[],
+    setItems: React.Dispatch<React.SetStateAction<T[]>>,
+    scopedItems: T[],
+    id: string,
+    direction: -1 | 1,
+    kind:
+      | "areas"
+      | "task-projects"
+      | "tasks"
+      | "knowledge-projects"
+      | "knowledge-pages"
+      | "knowledge-blocks",
+  ) {
+    const index = scopedItems.findIndex((item) => item.id === id);
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= scopedItems.length) {
+      return;
+    }
+    const reordered = [...scopedItems];
+    [reordered[index], reordered[targetIndex]] = [
+      reordered[targetIndex],
+      reordered[index],
+    ];
+    const scopedIds = new Set(scopedItems.map((item) => item.id));
+    let replacementIndex = 0;
+    const nextItems = allItems.map((item) =>
+      scopedIds.has(item.id)
+        ? { ...reordered[replacementIndex], position: replacementIndex++ }
+        : item,
+    );
+    setItems(nextItems);
+    dashboardAction({ action: "reorder-items", kind, ids: reordered.map((item) => item.id) }).catch(
+      () => setItems(allItems),
+    );
   }
 
   async function toggleTask(id: string) {
@@ -1464,7 +1537,7 @@ export function DashboardClient({
                 </NookCard>
               )}
 
-              {areas.map((area) => {
+              {areas.map((area, areaIndex) => {
                 const directTasks = tasks.filter(
                   (task) => task.areaId === area.id && !task.projectId,
                 );
@@ -1479,6 +1552,31 @@ export function DashboardClient({
                     subtitle={`${directTasks.filter((task) => !task.done).length} direkte Aufgaben`}
                     action={
                       <div className="flex flex-wrap items-center justify-end gap-1">
+                        <OrderControls
+                          label={area.name}
+                          first={areaIndex === 0}
+                          last={areaIndex === areas.length - 1}
+                          onMoveUp={() =>
+                            moveOrderedItem(
+                              areas,
+                              setAreas,
+                              areas,
+                              area.id,
+                              -1,
+                              "areas",
+                            )
+                          }
+                          onMoveDown={() =>
+                            moveOrderedItem(
+                              areas,
+                              setAreas,
+                              areas,
+                              area.id,
+                              1,
+                              "areas",
+                            )
+                          }
+                        />
                         <button
                           onClick={() => editArea(area)}
                           className="grid h-10 w-10 place-items-center rounded-full text-nook-muted transition hover:bg-black/5 hover:text-nook-ink"
@@ -1513,7 +1611,7 @@ export function DashboardClient({
                         Direkte To-dos
                       </p>
                       <div className="divide-y divide-black/5">
-                        {directTasks.map((task) => (
+                        {directTasks.map((task, taskIndex) => (
                           <TaskRow
                             key={task.id}
                             task={task}
@@ -1521,6 +1619,32 @@ export function DashboardClient({
                             onToggle={() => toggleTask(task.id)}
                             onEdit={() => openTaskEditor(task)}
                             onDelete={() => deleteTask(task)}
+                            onMoveUp={
+                              taskIndex > 0
+                                ? () =>
+                                    moveOrderedItem(
+                                      tasks,
+                                      setTasks,
+                                      directTasks,
+                                      task.id,
+                                      -1,
+                                      "tasks",
+                                    )
+                                : undefined
+                            }
+                            onMoveDown={
+                              taskIndex < directTasks.length - 1
+                                ? () =>
+                                    moveOrderedItem(
+                                      tasks,
+                                      setTasks,
+                                      directTasks,
+                                      task.id,
+                                      1,
+                                      "tasks",
+                                    )
+                                : undefined
+                            }
                           />
                         ))}
                         {directTasks.length === 0 && (
@@ -1531,7 +1655,11 @@ export function DashboardClient({
                       </div>
                     </div>
 
-                    {areaProjects.map((project) => (
+                    {areaProjects.map((project, projectIndex) => {
+                      const projectTasks = tasks.filter(
+                        (task) => task.projectId === project.id,
+                      );
+                      return (
                       <div
                         key={project.id}
                         className="mt-5 border-t border-black/5 pt-5"
@@ -1540,6 +1668,31 @@ export function DashboardClient({
                           <div>
                             <div className="flex items-center gap-2">
                               <h3 className="font-medium">{project.title}</h3>
+                              <OrderControls
+                                label={project.title}
+                                first={projectIndex === 0}
+                                last={projectIndex === areaProjects.length - 1}
+                                onMoveUp={() =>
+                                  moveOrderedItem(
+                                    projects,
+                                    setProjects,
+                                    areaProjects,
+                                    project.id,
+                                    -1,
+                                    "task-projects",
+                                  )
+                                }
+                                onMoveDown={() =>
+                                  moveOrderedItem(
+                                    projects,
+                                    setProjects,
+                                    areaProjects,
+                                    project.id,
+                                    1,
+                                    "task-projects",
+                                  )
+                                }
+                              />
                               <button
                                 onClick={() => openProjectEditor(project)}
                                 className="grid h-9 w-9 place-items-center rounded-full text-nook-muted transition hover:bg-black/5 hover:text-nook-ink"
@@ -1561,11 +1714,7 @@ export function DashboardClient({
                               </p>
                             )}
                             <p className="mt-1 text-xs text-nook-muted">
-                              {
-                                tasks.filter(
-                                  (task) => task.projectId === project.id,
-                                ).length
-                              }{" "}
+                              {projectTasks.length}{" "}
                               Aufgaben
                               {project.endDate
                                 ? ` · bis ${new Intl.DateTimeFormat("de-CH").format(new Date(`${project.endDate}T12:00:00`))}`
@@ -1580,9 +1729,7 @@ export function DashboardClient({
                           </button>
                         </div>
                         <div className="divide-y divide-black/5">
-                          {tasks
-                            .filter((task) => task.projectId === project.id)
-                            .map((task) => (
+                          {projectTasks.map((task, taskIndex) => (
                               <TaskRow
                                 key={task.id}
                                 task={task}
@@ -1591,18 +1738,43 @@ export function DashboardClient({
                                 onToggle={() => toggleTask(task.id)}
                                 onEdit={() => openTaskEditor(task)}
                                 onDelete={() => deleteTask(task)}
+                                onMoveUp={
+                                  taskIndex > 0
+                                    ? () =>
+                                        moveOrderedItem(
+                                          tasks,
+                                          setTasks,
+                                          projectTasks,
+                                          task.id,
+                                          -1,
+                                          "tasks",
+                                        )
+                                    : undefined
+                                }
+                                onMoveDown={
+                                  taskIndex < projectTasks.length - 1
+                                    ? () =>
+                                        moveOrderedItem(
+                                          tasks,
+                                          setTasks,
+                                          projectTasks,
+                                          task.id,
+                                          1,
+                                          "tasks",
+                                        )
+                                    : undefined
+                                }
                               />
                             ))}
-                          {tasks.filter(
-                            (task) => task.projectId === project.id,
-                          ).length === 0 && (
+                          {projectTasks.length === 0 && (
                             <p className="py-4 text-sm text-nook-muted">
                               Dieses Projekt ist noch ganz offen.
                             </p>
                           )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </NookCard>
                 );
               })}
@@ -1724,17 +1896,47 @@ export function DashboardClient({
           >
             {!activeKnowledgeProject ? (
               <div className="grid gap-5 md:grid-cols-2">
-                {knowledgeProjects.map((project) => {
+                {knowledgeProjects.map((project, projectIndex) => {
                   const pageCount = knowledgeProjectPages.filter(
                     (projectPage) => projectPage.projectId === project.id,
                   ).length;
                   return (
-                    <button
+                    <article
                       key={project.id}
-                      onClick={() => openKnowledgeProject(project)}
-                      className="group rounded-[24px] border border-white/80 bg-white/72 p-6 text-left shadow-nook backdrop-blur-2xl transition duration-500 hover:-translate-y-0.5 hover:bg-white/80"
+                      className="group relative rounded-[24px] border border-white/80 bg-white/72 shadow-nook backdrop-blur-2xl transition duration-500 hover:-translate-y-0.5 hover:bg-white/80"
                     >
-                      <div className="flex items-start justify-between gap-4">
+                      <div className="absolute right-5 top-5 z-10">
+                        <OrderControls
+                          label={project.title}
+                          first={projectIndex === 0}
+                          last={projectIndex === knowledgeProjects.length - 1}
+                          onMoveUp={() =>
+                            moveOrderedItem(
+                              knowledgeProjects,
+                              setKnowledgeProjects,
+                              knowledgeProjects,
+                              project.id,
+                              -1,
+                              "knowledge-projects",
+                            )
+                          }
+                          onMoveDown={() =>
+                            moveOrderedItem(
+                              knowledgeProjects,
+                              setKnowledgeProjects,
+                              knowledgeProjects,
+                              project.id,
+                              1,
+                              "knowledge-projects",
+                            )
+                          }
+                        />
+                      </div>
+                      <button
+                        onClick={() => openKnowledgeProject(project)}
+                        className="block w-full p-6 text-left"
+                      >
+                      <div className="flex items-start justify-between gap-4 pr-20">
                         <div className="grid h-10 w-10 place-items-center rounded-2xl bg-nook-violet/10 text-nook-violet">
                           <FolderKanban size={19} strokeWidth={1.7} />
                         </div>
@@ -1754,7 +1956,8 @@ export function DashboardClient({
                           ? "1 Notizseite"
                           : `${pageCount} Notizseiten`}
                       </p>
-                    </button>
+                      </button>
+                    </article>
                   );
                 })}
                 {knowledgeProjects.length === 0 && (
@@ -1841,20 +2044,49 @@ export function DashboardClient({
                             projectPage.projectId ===
                             activeKnowledgeProject.id,
                         )
-                        .map((projectPage) => (
-                          <button
+                        .map((projectPage, pageIndex, projectPages) => (
+                          <div
                             key={projectPage.id}
-                            onClick={() => selectKnowledgePage(projectPage)}
                             className={[
-                              "flex w-full items-center gap-2 rounded-2xl px-3 py-3 text-left text-sm transition",
+                              "flex w-full items-center gap-1 rounded-2xl text-sm transition",
                               activeKnowledgePageId === projectPage.id
                                 ? "bg-nook-violet/10 text-nook-violet"
                                 : "hover:bg-black/[0.035]",
                             ].join(" ")}
                           >
-                            <FileText size={15} strokeWidth={1.7} />
-                            <span className="truncate">{projectPage.title}</span>
-                          </button>
+                            <button
+                              onClick={() => selectKnowledgePage(projectPage)}
+                              className="flex min-w-0 flex-1 items-center gap-2 px-3 py-3 text-left"
+                            >
+                              <FileText size={15} strokeWidth={1.7} />
+                              <span className="truncate">{projectPage.title}</span>
+                            </button>
+                            <OrderControls
+                              label={projectPage.title}
+                              first={pageIndex === 0}
+                              last={pageIndex === projectPages.length - 1}
+                              onMoveUp={() =>
+                                moveOrderedItem(
+                                  knowledgeProjectPages,
+                                  setKnowledgeProjectPages,
+                                  projectPages,
+                                  projectPage.id,
+                                  -1,
+                                  "knowledge-pages",
+                                )
+                              }
+                              onMoveDown={() =>
+                                moveOrderedItem(
+                                  knowledgeProjectPages,
+                                  setKnowledgeProjectPages,
+                                  projectPages,
+                                  projectPage.id,
+                                  1,
+                                  "knowledge-pages",
+                                )
+                              }
+                            />
+                          </div>
                         ))}
                     </div>
                   </aside>
@@ -1953,12 +2185,38 @@ export function DashboardClient({
                               (block) =>
                                 block.pageId === activeKnowledgePage.id,
                             )
-                            .map((block) => (
+                            .map((block, blockIndex, pageBlocks) => (
                               <KnowledgeProjectBlockCard
                                 key={block.id}
                                 block={block}
                                 onUpdate={updateKnowledgeProjectBlock}
                                 onDelete={deleteKnowledgeProjectBlock}
+                                onMoveUp={
+                                  blockIndex > 0
+                                    ? () =>
+                                        moveOrderedItem(
+                                          knowledgeProjectBlocks,
+                                          setKnowledgeProjectBlocks,
+                                          pageBlocks,
+                                          block.id,
+                                          -1,
+                                          "knowledge-blocks",
+                                        )
+                                    : undefined
+                                }
+                                onMoveDown={
+                                  blockIndex < pageBlocks.length - 1
+                                    ? () =>
+                                        moveOrderedItem(
+                                          knowledgeProjectBlocks,
+                                          setKnowledgeProjectBlocks,
+                                          pageBlocks,
+                                          block.id,
+                                          1,
+                                          "knowledge-blocks",
+                                        )
+                                    : undefined
+                                }
                               />
                             ))}
                         </div>

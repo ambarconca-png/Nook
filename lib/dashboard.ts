@@ -102,10 +102,10 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
   ] =
     await Promise.all([
     db
-      .select({ id: areas.id, name: areas.name })
+      .select({ id: areas.id, name: areas.name, position: areas.position })
       .from(areas)
       .where(eq(areas.userId, userId))
-      .orderBy(asc(areas.createdAt)),
+      .orderBy(asc(areas.position), asc(areas.createdAt)),
       db
         .select({
           id: taskProjects.id,
@@ -114,20 +114,25 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
           description: taskProjects.description,
           endDate: taskProjects.endDate,
           notes: taskProjects.notes,
+          position: taskProjects.position,
         })
         .from(taskProjects)
         .where(eq(taskProjects.userId, userId))
-        .orderBy(asc(taskProjects.createdAt)),
+        .orderBy(asc(taskProjects.position), asc(taskProjects.createdAt)),
       db
         .select({
           id: knowledgeProjects.id,
           title: knowledgeProjects.title,
           description: knowledgeProjects.description,
           status: knowledgeProjects.status,
+          position: knowledgeProjects.position,
         })
         .from(knowledgeProjects)
         .where(eq(knowledgeProjects.userId, userId))
-        .orderBy(desc(knowledgeProjects.updatedAt)),
+        .orderBy(
+          asc(knowledgeProjects.position),
+          desc(knowledgeProjects.updatedAt),
+        ),
       db
         .select({
           id: knowledgeProjectPages.id,
@@ -168,10 +173,11 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
           notes: tasks.notes,
           recurrence: tasks.recurrence,
           completedAt: tasks.completedAt,
+          position: tasks.position,
         })
         .from(tasks)
         .where(eq(tasks.userId, userId))
-        .orderBy(asc(tasks.createdAt)),
+        .orderBy(asc(tasks.position), asc(tasks.createdAt)),
     db
       .select({
         id: inboxItems.id,

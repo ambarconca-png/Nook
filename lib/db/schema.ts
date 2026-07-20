@@ -46,6 +46,7 @@ export const areas = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -70,6 +71,7 @@ export const taskProjects = pgTable(
     description: text("description").notNull().default(""),
     endDate: date("end_date"),
     notes: text("notes").notNull().default(""),
+    position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -90,6 +92,7 @@ export const knowledgeProjects = pgTable(
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
     status: text("status").notNull().default("idea"),
+    position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -171,6 +174,7 @@ export const tasks = pgTable(
     priority: text("priority").notNull().default("none"),
     notes: text("notes").notNull().default(""),
     recurrence: text("recurrence").notNull().default("none"),
+    position: integer("position").notNull().default(0),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
