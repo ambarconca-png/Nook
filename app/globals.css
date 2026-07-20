@@ -137,6 +137,14 @@ textarea {
   border-radius: 14px !important;
 }
 
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 :focus-visible {
   outline: 3px solid rgb(var(--module-color) / 0.22) !important;
   outline-offset: 2px;

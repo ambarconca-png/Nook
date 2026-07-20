@@ -1,3 +1,5 @@
+import { ChevronDown } from "lucide-react";
+
 export function NookCard({
   title,
   subtitle,
@@ -5,6 +7,8 @@ export function NookCard({
   action,
   accent = "teal",
   onOpen,
+  onTitleToggle,
+  expanded = true,
   children,
 }: {
   title: string;
@@ -13,6 +17,8 @@ export function NookCard({
   action?: React.ReactNode;
   accent?: "teal" | "blue" | "green" | "pink" | "orange" | "violet";
   onOpen?: () => void;
+  onTitleToggle?: () => void;
+  expanded?: boolean;
   children: React.ReactNode;
 }) {
   const accents = {
@@ -89,11 +95,25 @@ export function NookCard({
             </div>
           )}
           <div>
-            <h2
-              className={`text-[17px] font-semibold tracking-[-0.02em] ${accents.title}`}
-            >
-              {title}
-            </h2>
+            {onTitleToggle ? (
+              <button
+                onClick={onTitleToggle}
+                className={`flex min-h-10 items-center gap-2 text-left text-[17px] font-semibold tracking-[-0.02em] ${accents.title}`}
+                aria-expanded={expanded}
+              >
+                {title}
+                <ChevronDown
+                  size={16}
+                  className={`transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
+                />
+              </button>
+            ) : (
+              <h2
+                className={`text-[17px] font-semibold tracking-[-0.02em] ${accents.title}`}
+              >
+                {title}
+              </h2>
+            )}
             {subtitle && (
               <p className="mt-0.5 text-xs text-nook-muted">{subtitle}</p>
             )}
@@ -101,7 +121,7 @@ export function NookCard({
         </div>
         {action}
       </div>
-      {children}
+      {expanded && children}
     </section>
   );
 }

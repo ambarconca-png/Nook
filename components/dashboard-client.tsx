@@ -242,6 +242,12 @@ export function DashboardClient({
   const [trackingEntries, setTrackingEntries] = useState<TrackingEntry[]>(
     initialData.trackingEntries,
   );
+  const [collapsedAreaIds, setCollapsedAreaIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [collapsedTaskProjectIds, setCollapsedTaskProjectIds] = useState<
+    Set<string>
+  >(() => new Set());
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("nook-theme");
@@ -258,6 +264,18 @@ export function DashboardClient({
     setDarkMode(next);
     document.documentElement.classList.toggle("dark", next);
     window.localStorage.setItem("nook-theme", next ? "dark" : "light");
+  }
+
+  function toggleCollapsed(
+    id: string,
+    setIds: React.Dispatch<React.SetStateAction<Set<string>>>,
+  ) {
+    setIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   const todayTasks = useMemo(
@@ -1550,6 +1568,10 @@ export function DashboardClient({
                     key={area.id}
                     title={area.name}
                     subtitle={`${directTasks.filter((task) => !task.done).length} direkte Aufgaben`}
+                    expanded={!collapsedAreaIds.has(area.id)}
+                    onTitleToggle={() =>
+                      toggleCollapsed(area.id, setCollapsedAreaIds)
+                    }
                     action={
                       <div className="flex flex-wrap items-center justify-end gap-1">
                         <OrderControls
@@ -1667,7 +1689,28 @@ export function DashboardClient({
                         <div className="mb-2 flex items-start justify-between gap-4">
                           <div>
                             <div className="flex items-center gap-2">
-                              <h3 className="font-medium">{project.title}</h3>
+                              <button
+                                onClick={() =>
+                                  toggleCollapsed(
+                                    project.id,
+                                    setCollapsedTaskProjectIds,
+                                  )
+                                }
+                                className="flex min-h-9 items-center gap-2 text-left font-medium"
+                                aria-expanded={
+                                  !collapsedTaskProjectIds.has(project.id)
+                                }
+                              >
+                                {project.title}
+                                <ChevronDown
+                                  size={15}
+                                  className={`transition-transform duration-200 ${
+                                    collapsedTaskProjectIds.has(project.id)
+                                      ? "-rotate-90"
+                                      : ""
+                                  }`}
+                                />
+                              </button>
                               <OrderControls
                                 label={project.title}
                                 first={projectIndex === 0}
@@ -1708,18 +1751,21 @@ export function DashboardClient({
                                 <Trash2 size={14} strokeWidth={1.8} />
                               </button>
                             </div>
-                            {project.description && (
+                            {!collapsedTaskProjectIds.has(project.id) &&
+                              project.description && (
                               <p className="mt-1 max-w-2xl text-sm leading-6 text-nook-muted">
                                 {project.description}
                               </p>
                             )}
-                            <p className="mt-1 text-xs text-nook-muted">
-                              {projectTasks.length}{" "}
-                              Aufgaben
-                              {project.endDate
-                                ? ` · bis ${new Intl.DateTimeFormat("de-CH").format(new Date(`${project.endDate}T12:00:00`))}`
-                                : ""}
-                            </p>
+                            {!collapsedTaskProjectIds.has(project.id) && (
+                              <p className="mt-1 text-xs text-nook-muted">
+                                {projectTasks.length}{" "}
+                                Aufgaben
+                                {project.endDate
+                                  ? ` · bis ${new Intl.DateTimeFormat("de-CH").format(new Date(`${project.endDate}T12:00:00`))}`
+                                  : ""}
+                              </p>
+                            )}
                           </div>
                           <button
                             onClick={() => addTask(area.id, project.id)}
@@ -1728,6 +1774,7 @@ export function DashboardClient({
                             + Aufgabe
                           </button>
                         </div>
+                        {!collapsedTaskProjectIds.has(project.id) && (
                         <div className="divide-y divide-black/5">
                           {projectTasks.map((task, taskIndex) => (
                               <TaskRow
@@ -1772,6 +1819,7 @@ export function DashboardClient({
                             </p>
                           )}
                         </div>
+                        )}
                       </div>
                       );
                     })}

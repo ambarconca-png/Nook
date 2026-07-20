@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { Check, ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
 import type { Area, Project, Task } from "@/lib/types";
 
@@ -20,6 +23,7 @@ export function TaskRow({
   onMoveUp?: () => void;
   onMoveDown?: () => void;
 }) {
+  const [noteOpen, setNoteOpen] = useState(false);
   const details = [
     area?.name,
     project?.title,
@@ -38,7 +42,8 @@ export function TaskRow({
   ].filter(Boolean);
 
   return (
-    <div className="flex items-center gap-3 py-3">
+    <div className="py-3">
+      <div className="flex items-center gap-3">
       <button
         onClick={onToggle}
         className={[
@@ -52,7 +57,12 @@ export function TaskRow({
         {task.done && <Check size={13} strokeWidth={2.4} />}
       </button>
 
-      <div className="min-w-0 flex-1">
+      <button
+        onClick={() => setNoteOpen((current) => !current)}
+        className="min-w-0 flex-1 text-left"
+        aria-expanded={noteOpen}
+        aria-label={`${task.title}: Notiz ${noteOpen ? "ausblenden" : "anzeigen"}`}
+      >
         <p
           className={[
             "text-sm",
@@ -66,7 +76,7 @@ export function TaskRow({
             {details.join(" · ")}
           </p>
         )}
-      </div>
+      </button>
 
       <div className="flex shrink-0 items-center gap-1">
         {onMoveUp && (
@@ -102,6 +112,12 @@ export function TaskRow({
           <Trash2 size={15} strokeWidth={1.8} />
         </button>
       </div>
+      </div>
+      {noteOpen && (
+        <div className="ml-8 mt-3 rounded-2xl bg-white/45 px-4 py-3 text-sm leading-6 text-nook-muted dark:bg-white/5">
+          {task.notes || "Für diese Aufgabe ist noch keine Notiz hinterlegt."}
+        </div>
+      )}
     </div>
   );
 }
