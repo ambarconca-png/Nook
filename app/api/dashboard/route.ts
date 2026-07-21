@@ -49,7 +49,7 @@ function cleanProjectStatus(value: unknown) {
 
 function cleanProjectBlockType(value: unknown) {
   const type = cleanText(value, 12);
-  return ["checklist", "link", "table"].includes(type) ? type : "";
+  return ["text", "checklist", "link", "table"].includes(type) ? type : "";
 }
 
 function cleanProjectBlockContent(value: unknown) {
@@ -887,6 +887,10 @@ export async function POST(request: Request) {
       }
 
       const defaults = {
+        text: {
+          title: "Text",
+          content: JSON.stringify({ html: "" }),
+        },
         checklist: {
           title: "Checkliste",
           content: JSON.stringify({ items: [{ text: "", done: false }] }),
@@ -904,6 +908,10 @@ export async function POST(request: Request) {
         },
       } as const;
       const preset = defaults[type as keyof typeof defaults];
+      const [blockPosition] = await db
+        .select({ value: count() })
+        .from(knowledgeProjectBlocks)
+        .where(eq(knowledgeProjectBlocks.pageId, pageId));
 
       const [block] = await db
         .insert(knowledgeProjectBlocks)
@@ -913,6 +921,7 @@ export async function POST(request: Request) {
           type,
           title: preset.title,
           content: preset.content,
+          position: blockPosition?.value ?? 0,
         })
         .returning({
           id: knowledgeProjectBlocks.id,
@@ -1347,7 +1356,7 @@ export async function POST(request: Request) {
       const unit = cleanText(body.unit, 40) || null;
       const color = cleanRoutineChoice(
         body.color,
-        ["rose", "peach", "violet", "blue", "teal"],
+        ["rose", "peach", "violet", "blue", "teal", "green", "amber", "slate"],
         "violet",
       );
       const options = Array.isArray(body.options)
@@ -1435,7 +1444,7 @@ export async function POST(request: Request) {
       const name = cleanText(body.name, 100);
       const color = cleanRoutineChoice(
         body.color,
-        ["rose", "peach", "violet", "blue", "teal"],
+        ["rose", "peach", "violet", "blue", "teal", "green", "amber", "slate"],
         "violet",
       );
       const fields = cleanTrackingFields(body.fields);

@@ -33,7 +33,7 @@ export type KnowledgeProjectPage = {
 export type KnowledgeProjectBlock = {
   id: string;
   pageId: string;
-  type: "checklist" | "link" | "table";
+  type: "text" | "checklist" | "link" | "table";
   title: string;
   content: string;
   position?: number;
@@ -101,7 +101,15 @@ export type TrackingTracker = {
   unit?: string;
   options: string[];
   fields: TrackingField[];
-  color: "rose" | "peach" | "violet" | "blue" | "teal";
+  color:
+    | "rose"
+    | "peach"
+    | "violet"
+    | "blue"
+    | "teal"
+    | "green"
+    | "amber"
+    | "slate";
 };
 
 export type TrackingField = {

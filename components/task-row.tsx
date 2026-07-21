@@ -13,6 +13,7 @@ export function TaskRow({
   onDelete,
   onMoveUp,
   onMoveDown,
+  onSaveNotes,
 }: {
   task: Task;
   area?: Area;
@@ -22,8 +23,11 @@ export function TaskRow({
   onDelete: () => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  onSaveNotes?: (notes: string) => Promise<void>;
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
+  const [notes, setNotes] = useState(task.notes);
+  const [notesSaving, setNotesSaving] = useState(false);
   const details = [
     area?.name,
     project?.title,
@@ -114,8 +118,32 @@ export function TaskRow({
       </div>
       </div>
       {noteOpen && (
-        <div className="ml-8 mt-3 rounded-2xl bg-white/45 px-4 py-3 text-sm leading-6 text-nook-muted dark:bg-white/5">
-          {task.notes || "Für diese Aufgabe ist noch keine Notiz hinterlegt."}
+        <div className="ml-8 mt-3 rounded-2xl bg-white/45 px-4 py-3 dark:bg-white/5">
+          <textarea
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            className="min-h-24 w-full resize-y whitespace-pre-wrap bg-transparent text-sm leading-6 text-nook-muted outline-none"
+            placeholder="Notiz hinzufügen …"
+            aria-label={`Notiz zu ${task.title}`}
+          />
+          {onSaveNotes && notes !== task.notes && (
+            <div className="mt-2 flex justify-end">
+              <button
+                onClick={async () => {
+                  setNotesSaving(true);
+                  try {
+                    await onSaveNotes(notes);
+                  } finally {
+                    setNotesSaving(false);
+                  }
+                }}
+                disabled={notesSaving}
+                className="rounded-xl bg-nook-teal px-3 py-2 text-xs text-white disabled:opacity-60"
+              >
+                {notesSaving ? "Speichert …" : "Notiz speichern"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

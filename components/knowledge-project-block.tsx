@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
+  Bold,
   ChevronDown,
   ChevronUp,
   Link2,
@@ -9,6 +10,8 @@ import {
   Plus,
   Table2,
   Trash2,
+  Type,
+  Underline,
 } from "lucide-react";
 import type { KnowledgeProjectBlock } from "@/lib/types";
 
@@ -25,6 +28,8 @@ type TableContent = {
   columns: string[];
   rows: string[][];
 };
+
+type TextContent = { html: string };
 
 function parseContent<T>(content: string, fallback: T): T {
   try {
@@ -61,20 +66,30 @@ export function KnowledgeProjectBlockCard({
       rows: [["", ""]],
     }),
   );
+  const [text] = useState<TextContent>(() =>
+    parseContent(block.content, { html: "" }),
+  );
+  const textEditorRef = useRef<HTMLDivElement>(null);
 
   const Icon =
-    block.type === "checklist"
+    block.type === "text"
+      ? Type
+      : block.type === "checklist"
       ? ListChecks
       : block.type === "link"
         ? Link2
         : Table2;
 
-  async function save(nextContent?: ChecklistContent | LinkContent | TableContent) {
+  async function save(
+    nextContent?: ChecklistContent | LinkContent | TableContent | TextContent,
+  ) {
     setSaving(true);
     try {
       const content =
         nextContent ??
-        (block.type === "checklist"
+        (block.type === "text"
+          ? text
+          : block.type === "checklist"
           ? checklist
           : block.type === "link"
             ? link
@@ -222,6 +237,51 @@ export function KnowledgeProjectBlockCard({
             <Plus size={14} />
             Punkt hinzufügen
           </button>
+        </div>
+      )}
+
+      {block.type === "text" && (
+        <div className="mt-4">
+          <div className="mb-2 flex gap-1">
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                document.execCommand("bold");
+              }}
+              className="grid h-9 w-9 place-items-center rounded-xl bg-black/5 text-nook-muted hover:text-nook-violet"
+              aria-label="Fett"
+            >
+              <Bold size={15} />
+            </button>
+            <button
+              onMouseDown={(event) => {
+                event.preventDefault();
+                document.execCommand("underline");
+              }}
+              className="grid h-9 w-9 place-items-center rounded-xl bg-black/5 text-nook-muted hover:text-nook-violet"
+              aria-label="Unterstrichen"
+            >
+              <Underline size={15} />
+            </button>
+          </div>
+          <div
+            ref={textEditorRef}
+            contentEditable
+            suppressContentEditableWarning
+            dangerouslySetInnerHTML={{ __html: text.html }}
+            onBlur={() => void save({ html: textEditorRef.current?.innerHTML ?? "" })}
+            onPaste={(event) => {
+              event.preventDefault();
+              document.execCommand(
+                "insertText",
+                false,
+                event.clipboardData.getData("text/plain"),
+              );
+            }}
+            className="min-h-28 rounded-[16px] border border-black/10 bg-white/65 px-4 py-3 text-sm leading-7 outline-none focus:border-nook-violet"
+            data-placeholder="Schreib einfach los …"
+            aria-label="Textinhalt"
+          />
         </div>
       )}
 

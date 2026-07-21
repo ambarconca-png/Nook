@@ -57,6 +57,9 @@ const colorClasses = {
   violet: "bg-violet-100 text-violet-700",
   blue: "bg-blue-100 text-blue-700",
   teal: "bg-teal-100 text-teal-700",
+  green: "bg-emerald-100 text-emerald-700",
+  amber: "bg-amber-100 text-amber-700",
+  slate: "bg-slate-200 text-slate-700",
 };
 
 const dotClasses = {
@@ -65,6 +68,9 @@ const dotClasses = {
   violet: "bg-violet-400",
   blue: "bg-blue-400",
   teal: "bg-teal-400",
+  green: "bg-emerald-400",
+  amber: "bg-amber-400",
+  slate: "bg-slate-400",
 };
 
 function localDateTimeInput(date = new Date()) {
@@ -784,6 +790,11 @@ export function TrackingWorkspace({
             <input
               autoFocus
               value={trackerName}
+              name="nook-tracker-title"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              data-1p-ignore="true"
               onChange={(event) => setTrackerName(event.target.value)}
               className="mt-2 w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 outline-none focus:border-nook-violet"
               placeholder="Schlaf, Energie, Wasser …"
@@ -819,8 +830,13 @@ export function TrackingWorkspace({
                   <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
                     <label className="block text-xs font-medium">
                       Feldname
-                      <input
-                        value={field.label}
+                    <input
+                      value={field.label}
+                      name={`nook-tracker-field-${field.id}`}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      data-1p-ignore="true"
                         onChange={(event) =>
                           setTrackerFields((current) =>
                             current.map((item, index) =>
@@ -983,7 +999,7 @@ export function TrackingWorkspace({
           </div>
           <p className="mt-4 text-sm font-medium">Farbe</p>
           <div className="mt-2 flex gap-3">
-            {(["rose", "peach", "violet", "blue", "teal"] as const).map(
+            {(["rose", "peach", "violet", "blue", "teal", "green", "amber", "slate"] as const).map(
               (color) => (
                 <button
                   key={color}

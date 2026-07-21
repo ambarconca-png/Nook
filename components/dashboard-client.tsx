@@ -243,11 +243,17 @@ export function DashboardClient({
     initialData.trackingEntries,
   );
   const [collapsedAreaIds, setCollapsedAreaIds] = useState<Set<string>>(
-    () => new Set(),
+    () => new Set(initialData.areas.map((area) => area.id)),
   );
   const [collapsedTaskProjectIds, setCollapsedTaskProjectIds] = useState<
     Set<string>
-  >(() => new Set());
+  >(() => new Set(initialData.projects.map((project) => project.id)));
+  const [todoPriorityFilter, setTodoPriorityFilter] = useState<
+    Task["priority"] | "all"
+  >("all");
+  const [todoDueFilter, setTodoDueFilter] = useState<"all" | "today" | "week">(
+    "all",
+  );
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("nook-theme");
@@ -258,6 +264,12 @@ export function DashboardClient({
     setDarkMode(useDark);
     document.documentElement.classList.toggle("dark", useDark);
   }, []);
+
+  useEffect(() => {
+    if (page !== "todos") return;
+    setCollapsedAreaIds(new Set(areas.map((area) => area.id)));
+    setCollapsedTaskProjectIds(new Set(projects.map((project) => project.id)));
+  }, [page]);
 
   function toggleTheme() {
     const next = !darkMode;
@@ -279,9 +291,35 @@ export function DashboardClient({
   }
 
   const todayTasks = useMemo(
-    () => tasks.filter((task) => task.dueToday),
+    () =>
+      tasks
+        .filter((task) => task.dueToday)
+        .sort((left, right) => Number(left.done) - Number(right.done)),
     [tasks],
   );
+  const filteredTodoTasks = useMemo(() => {
+    const today = zurichDateKey(new Date());
+    const monday = new Date(`${today}T12:00:00`);
+    const sunday = new Date(`${today}T12:00:00`);
+    const weekday = sunday.getDay() || 7;
+    monday.setDate(monday.getDate() - (weekday - 1));
+    sunday.setDate(sunday.getDate() + (7 - weekday));
+    const weekStart = zurichDateKey(monday);
+    const weekEnd = zurichDateKey(sunday);
+    return tasks
+      .filter((task) =>
+        todoPriorityFilter === "all"
+          ? true
+          : task.priority === todoPriorityFilter,
+      )
+      .filter((task) => {
+        if (todoDueFilter === "all") return true;
+        if (!task.dueDate) return false;
+        if (todoDueFilter === "today") return task.dueDate === today;
+        return task.dueDate >= weekStart && task.dueDate <= weekEnd;
+      })
+      .sort((left, right) => Number(left.done) - Number(right.done));
+  }, [tasks, todoDueFilter, todoPriorityFilter]);
   const todayTracking = useMemo(() => {
     const todayKey = zurichDateKey(new Date());
     const todaysEntries = trackingEntries.filter(
@@ -337,6 +375,22 @@ export function DashboardClient({
 
     return {
       entryCount: todaysEntries.length,
+      entries: todaysEntries.slice(0, 4).map((entry) => {
+        const tracker = trackingTrackers.find(
+          (item) => item.id === entry.trackerId,
+        );
+        const firstValue = Object.values(entry.data).find(
+          (value) =>
+            typeof value === "string" || typeof value === "number",
+        );
+        return {
+          id: entry.id,
+          name: tracker?.name ?? "Tracking",
+          detail:
+            entry.notes ||
+            (firstValue !== undefined ? String(firstValue) : "Erfasst"),
+        };
+      }),
       cycleDay:
         cycleDay !== null && cycleDay > 0 && cycleDay <= 90 ? cycleDay : null,
       dailyGoals: dailyGoals.slice(0, 2),
@@ -472,6 +526,23 @@ export function DashboardClient({
     } finally {
       setEditTaskSaving(false);
     }
+  }
+
+  async function saveTaskNotes(task: Task, notes: string) {
+    const result = await dashboardAction<{ task: Task }>({
+      action: "update-task",
+      id: task.id,
+      title: task.title,
+      areaId: task.areaId,
+      projectId: task.projectId,
+      dueDate: task.dueDate,
+      priority: task.priority,
+      notes,
+      recurrence: task.recurrence,
+    });
+    setTasks((current) =>
+      current.map((item) => (item.id === task.id ? result.task : item)),
+    );
   }
 
   async function deleteTask(task: Task) {
@@ -1332,6 +1403,7 @@ export function DashboardClient({
                       onToggle={() => toggleTask(task.id)}
                       onEdit={() => openTaskEditor(task)}
                       onDelete={() => deleteTask(task)}
+                      onSaveNotes={(notes) => saveTaskNotes(task, notes)}
                     />
                   ))}
                   {todayTasks.length === 0 && (
@@ -1352,12 +1424,23 @@ export function DashboardClient({
               >
                 <div className="space-y-1">
                   {routines.map((routine) => (
-                    <RoutineRow
-                      key={routine.id}
-                      routine={routine}
-                      onToggle={() => toggleRoutine(routine.id)}
-                      onEdit={() => openRoutineEditor(routine)}
-                    />
+                    <div key={routine.id}>
+                      <RoutineRow
+                        routine={routine}
+                        onToggle={() => toggleRoutine(routine.id)}
+                        onEdit={() => openRoutineEditor(routine)}
+                      />
+                      {routine.preferredWeekdays.includes(
+                        ((new Date().getDay() + 6) % 7) + 1,
+                      ) && (
+                        <p className="ml-12 -mt-1 pb-2 text-xs text-emerald-700 dark:text-emerald-300">
+                          Heute vorgesehen
+                          {routine.reminderTime
+                            ? ` · Erinnerung um ${routine.reminderTime} Uhr`
+                            : ""}
+                        </p>
+                      )}
+                    </div>
                   ))}
                   {routines.length === 0 && (
                     <p className="w-full py-7 text-left text-sm leading-6 text-nook-muted">
@@ -1375,19 +1458,6 @@ export function DashboardClient({
                 onOpen={() => setPage("tracking")}
               >
                 <div className="space-y-3 py-2">
-                  <div className="rounded-2xl border border-rose-200/60 bg-rose-50/60 px-4 py-3 dark:border-rose-300/10 dark:bg-rose-300/5">
-                    <p className="text-sm font-medium text-rose-800 dark:text-rose-200">
-                      {todayTracking.entryCount === 0
-                        ? "Möchtest du heute etwas erfassen?"
-                        : todayTracking.entryCount === 1
-                          ? "Für heute ist bereits ein Eintrag festgehalten."
-                          : `Für heute sind bereits ${todayTracking.entryCount} Einträge festgehalten.`}
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-nook-muted">
-                      Tippe auf die Karte, um Tracking zu öffnen.
-                    </p>
-                  </div>
-
                   <div className="grid grid-cols-2 gap-2">
                     <div className="rounded-2xl bg-white/55 px-3 py-3 dark:bg-white/5">
                       <p className="text-xs text-nook-muted">Heute</p>
@@ -1410,6 +1480,24 @@ export function DashboardClient({
                             : "Noch keine"}
                       </p>
                     </div>
+                  </div>
+
+                  <div className="divide-y divide-rose-100/70">
+                    {todayTracking.entries.map((entry) => (
+                      <div key={entry.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                        <span className="font-medium text-rose-800 dark:text-rose-200">
+                          {entry.name}
+                        </span>
+                        <span className="truncate text-xs text-nook-muted">
+                          {entry.detail}
+                        </span>
+                      </div>
+                    ))}
+                    {todayTracking.entries.length === 0 && (
+                      <p className="py-3 text-sm text-nook-muted">
+                        Heute noch nichts erfasst.
+                      </p>
+                    )}
                   </div>
 
                   {todayTracking.dailyGoals.map((goal) => {
@@ -1466,7 +1554,6 @@ export function DashboardClient({
         {page === "inbox" && (
           <PageHeading
             title="Inbox"
-            subtitle="Erfassen zuerst, sortieren später."
             buttonLabel="Neu erfassen"
             onButton={() => setCaptureOpen(true)}
           >
@@ -1533,10 +1620,45 @@ export function DashboardClient({
         {page === "todos" && (
           <PageHeading
             title="To-dos"
-            subtitle="Direkte Aufgaben oder Aufgaben innerhalb eines Projekts."
             buttonLabel="Bereich"
             onButton={addArea}
           >
+            <section className="mb-5 flex flex-wrap gap-3 rounded-[20px] border border-white/70 bg-white/55 p-3 backdrop-blur-xl">
+              <label className="text-xs text-nook-muted">
+                Priorität
+                <select
+                  value={todoPriorityFilter}
+                  onChange={(event) =>
+                    setTodoPriorityFilter(
+                      event.target.value as Task["priority"] | "all",
+                    )
+                  }
+                  className="mt-1 block min-w-40 border border-black/10 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="all">Alle</option>
+                  <option value="high">Hoch</option>
+                  <option value="medium">Mittel</option>
+                  <option value="low">Niedrig</option>
+                  <option value="none">Ohne Priorität</option>
+                </select>
+              </label>
+              <label className="text-xs text-nook-muted">
+                Fälligkeit
+                <select
+                  value={todoDueFilter}
+                  onChange={(event) =>
+                    setTodoDueFilter(
+                      event.target.value as "all" | "today" | "week",
+                    )
+                  }
+                  className="mt-1 block min-w-40 border border-black/10 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="all">Alle</option>
+                  <option value="today">Heute</option>
+                  <option value="week">Diese Woche</option>
+                </select>
+              </label>
+            </section>
             <div className="grid gap-5">
               {areas.length === 0 && (
                 <NookCard title="Dein erster Bereich">
@@ -1556,7 +1678,7 @@ export function DashboardClient({
               )}
 
               {areas.map((area, areaIndex) => {
-                const directTasks = tasks.filter(
+                const directTasks = filteredTodoTasks.filter(
                   (task) => task.areaId === area.id && !task.projectId,
                 );
                 const areaProjects = projects.filter(
@@ -1567,7 +1689,11 @@ export function DashboardClient({
                   <NookCard
                     key={area.id}
                     title={area.name}
-                    subtitle={`${directTasks.filter((task) => !task.done).length} direkte Aufgaben`}
+                    subtitle={
+                      collapsedAreaIds.has(area.id)
+                        ? `${directTasks.length} ${directTasks.length === 1 ? "direkte Aufgabe" : "direkte Aufgaben"} · ${areaProjects.length} ${areaProjects.length === 1 ? "Projekt" : "Projekte"}`
+                        : undefined
+                    }
                     expanded={!collapsedAreaIds.has(area.id)}
                     onTitleToggle={() =>
                       toggleCollapsed(area.id, setCollapsedAreaIds)
@@ -1641,6 +1767,7 @@ export function DashboardClient({
                             onToggle={() => toggleTask(task.id)}
                             onEdit={() => openTaskEditor(task)}
                             onDelete={() => deleteTask(task)}
+                            onSaveNotes={(notes) => saveTaskNotes(task, notes)}
                             onMoveUp={
                               taskIndex > 0
                                 ? () =>
@@ -1678,7 +1805,7 @@ export function DashboardClient({
                     </div>
 
                     {areaProjects.map((project, projectIndex) => {
-                      const projectTasks = tasks.filter(
+                      const projectTasks = filteredTodoTasks.filter(
                         (task) => task.projectId === project.id,
                       );
                       return (
@@ -1757,10 +1884,12 @@ export function DashboardClient({
                                 {project.description}
                               </p>
                             )}
-                            {!collapsedTaskProjectIds.has(project.id) && (
+                            {collapsedTaskProjectIds.has(project.id) && (
                               <p className="mt-1 text-xs text-nook-muted">
                                 {projectTasks.length}{" "}
-                                Aufgaben
+                                {projectTasks.length === 1
+                                  ? "Aufgabe"
+                                  : "Aufgaben"}
                                 {project.endDate
                                   ? ` · bis ${new Intl.DateTimeFormat("de-CH").format(new Date(`${project.endDate}T12:00:00`))}`
                                   : ""}
@@ -1785,6 +1914,7 @@ export function DashboardClient({
                                 onToggle={() => toggleTask(task.id)}
                                 onEdit={() => openTaskEditor(task)}
                                 onDelete={() => deleteTask(task)}
+                                onSaveNotes={(notes) => saveTaskNotes(task, notes)}
                                 onMoveUp={
                                   taskIndex > 0
                                     ? () =>
@@ -1833,7 +1963,6 @@ export function DashboardClient({
         {page === "routines" && (
           <PageHeading
             title="Routinen"
-            subtitle="Fortschritt ohne Streak-Druck."
             buttonLabel="Routine"
             onButton={() => openRoutineEditor()}
           >
@@ -1912,7 +2041,6 @@ export function DashboardClient({
         {page === "tracking" && (
           <PageHeading
             title="Tracking"
-            subtitle="Beobachten, ohne zu bewerten."
             buttonLabel="Eigener Tracker"
             onButton={() => {
               setPage("tracking");
@@ -1934,11 +2062,6 @@ export function DashboardClient({
         {page === "projects" && (
           <PageHeading
             title="Projekte"
-            subtitle={
-              activeKnowledgeProject
-                ? "Ein Ort, an dem eine Idee wachsen darf."
-                : "Ideen, erste Gedanken und Wissen im Werden."
-            }
             buttonLabel="Projekt"
             onButton={() => openKnowledgeProjectEditor()}
           >
@@ -2161,14 +2284,18 @@ export function DashboardClient({
                             <Trash2 size={16} />
                           </button>
                         </div>
-                        <textarea
-                          value={knowledgePageContent}
-                          onChange={(event) =>
-                            setKnowledgePageContent(event.target.value)
-                          }
-                          className="mt-5 min-h-[360px] w-full resize-y bg-transparent text-[15px] leading-7 outline-none"
-                          placeholder="Schreib einfach los …"
-                        />
+                        {knowledgePageContent && (
+                          <label className="mt-5 block text-xs text-nook-muted">
+                            Bisheriger Seitentext
+                            <textarea
+                              value={knowledgePageContent}
+                              onChange={(event) =>
+                                setKnowledgePageContent(event.target.value)
+                              }
+                              className="mt-2 min-h-32 w-full resize-y rounded-2xl bg-white/45 px-4 py-3 text-[15px] leading-7 outline-none"
+                            />
+                          </label>
+                        )}
                         <div className="mt-4 flex justify-end">
                           <button
                             onClick={saveKnowledgePage}
@@ -2191,6 +2318,17 @@ export function DashboardClient({
                             </p>
                           </div>
                           <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() =>
+                                addKnowledgeProjectBlock(
+                                  activeKnowledgePage.id,
+                                  "text",
+                                )
+                              }
+                              className="rounded-2xl bg-nook-violet/10 px-3 py-2 text-xs text-nook-violet"
+                            >
+                              + Text
+                            </button>
                             <button
                               onClick={() =>
                                 addKnowledgeProjectBlock(
@@ -3122,7 +3260,7 @@ function PageHeading({
   children,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   buttonLabel: string;
   onButton: () => void;
   children: React.ReactNode;
@@ -3134,7 +3272,11 @@ function PageHeading({
           <h1 className="text-[28px] font-semibold leading-[1.2] tracking-[-0.035em] lg:text-[32px]">
             {title}
           </h1>
-          <p className="mt-2 text-sm leading-6 text-nook-muted">{subtitle}</p>
+          {subtitle && (
+            <p className="mt-2 text-sm leading-6 text-nook-muted">
+              {subtitle}
+            </p>
+          )}
         </div>
         <button
           onClick={onButton}

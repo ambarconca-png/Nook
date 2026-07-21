@@ -414,7 +414,7 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
           unit: tracker.unit ?? undefined,
           options,
           fields,
-          color: ["rose", "peach", "blue", "teal"].includes(tracker.color)
+          color: ["rose", "peach", "blue", "teal", "green", "amber", "slate"].includes(tracker.color)
             ? (tracker.color as TrackingTracker["color"])
             : "violet",
         };
