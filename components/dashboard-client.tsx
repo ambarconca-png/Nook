@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bell,
@@ -187,6 +187,7 @@ export function DashboardClient({
   const [editTaskPriority, setEditTaskPriority] =
     useState<Task["priority"]>("none");
   const [editTaskNotes, setEditTaskNotes] = useState("");
+  const editTaskNotesRef = useRef<HTMLTextAreaElement>(null);
   const [editTaskRecurrence, setEditTaskRecurrence] =
     useState<Task["recurrence"]>("none");
   const [editTaskError, setEditTaskError] = useState("");
@@ -251,9 +252,10 @@ export function DashboardClient({
   const [todoPriorityFilter, setTodoPriorityFilter] = useState<
     Task["priority"] | "all"
   >("all");
-  const [todoDueFilter, setTodoDueFilter] = useState<"all" | "today" | "week">(
-    "all",
-  );
+  const [todoDueFilter, setTodoDueFilter] = useState<
+    "all" | "today" | "week" | "overdue"
+  >("all");
+  const [todoSearch, setTodoSearch] = useState("");
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("nook-theme");
@@ -290,12 +292,20 @@ export function DashboardClient({
     });
   }
 
-  const todayTasks = useMemo(
+  const orderedTasks = useMemo(
     () =>
-      tasks
-        .filter((task) => task.dueToday)
-        .sort((left, right) => Number(left.done) - Number(right.done)),
+      [...tasks].sort((left, right) => {
+        const priorityRank = { high: 0, medium: 1, low: 2, none: 3 };
+        return (
+          Number(left.done) - Number(right.done) ||
+          priorityRank[left.priority] - priorityRank[right.priority]
+        );
+      }),
     [tasks],
+  );
+  const todayTasks = useMemo(
+    () => orderedTasks.filter((task) => task.dueToday),
+    [orderedTasks],
   );
   const filteredTodoTasks = useMemo(() => {
     const today = zurichDateKey(new Date());
@@ -306,7 +316,13 @@ export function DashboardClient({
     sunday.setDate(sunday.getDate() + (7 - weekday));
     const weekStart = zurichDateKey(monday);
     const weekEnd = zurichDateKey(sunday);
-    return tasks
+    const query = todoSearch.trim().toLocaleLowerCase("de-CH");
+    return orderedTasks
+      .filter((task) =>
+        query
+          ? `${task.title} ${task.notes}`.toLocaleLowerCase("de-CH").includes(query)
+          : true,
+      )
       .filter((task) =>
         todoPriorityFilter === "all"
           ? true
@@ -316,10 +332,12 @@ export function DashboardClient({
         if (todoDueFilter === "all") return true;
         if (!task.dueDate) return false;
         if (todoDueFilter === "today") return task.dueDate === today;
+        if (todoDueFilter === "overdue") {
+          return !task.done && task.dueDate < today;
+        }
         return task.dueDate >= weekStart && task.dueDate <= weekEnd;
-      })
-      .sort((left, right) => Number(left.done) - Number(right.done));
-  }, [tasks, todoDueFilter, todoPriorityFilter]);
+      });
+  }, [orderedTasks, todoDueFilter, todoPriorityFilter, todoSearch]);
   const todayTracking = useMemo(() => {
     const todayKey = zurichDateKey(new Date());
     const todaysEntries = trackingEntries.filter(
@@ -508,7 +526,7 @@ export function DashboardClient({
         projectId: editTaskProjectId || undefined,
         dueDate: editTaskDueDate || undefined,
         priority: editTaskPriority,
-        notes: editTaskNotes,
+        notes: editTaskNotesRef.current?.value ?? editTaskNotes,
         recurrence: editTaskRecurrence,
       });
       setTasks((current) =>
@@ -1623,7 +1641,17 @@ export function DashboardClient({
             buttonLabel="Bereich"
             onButton={addArea}
           >
-            <section className="mb-5 flex flex-wrap gap-3 rounded-[20px] border border-white/70 bg-white/55 p-3 backdrop-blur-xl">
+            <section className="mb-5 flex flex-wrap items-end gap-3 rounded-[20px] border border-white/70 bg-white/55 p-3 backdrop-blur-xl">
+              <label className="min-w-56 flex-1 text-xs text-nook-muted">
+                Suchen
+                <input
+                  type="search"
+                  value={todoSearch}
+                  onChange={(event) => setTodoSearch(event.target.value)}
+                  className="mt-1 block w-full border border-black/10 bg-white px-3 py-2 text-sm"
+                  placeholder="Aufgabe oder Notiz …"
+                />
+              </label>
               <label className="text-xs text-nook-muted">
                 Priorität
                 <select
@@ -1648,7 +1676,11 @@ export function DashboardClient({
                   value={todoDueFilter}
                   onChange={(event) =>
                     setTodoDueFilter(
-                      event.target.value as "all" | "today" | "week",
+                      event.target.value as
+                        | "all"
+                        | "today"
+                        | "week"
+                        | "overdue",
                     )
                   }
                   className="mt-1 block min-w-40 border border-black/10 bg-white px-3 py-2 text-sm"
@@ -1656,9 +1688,57 @@ export function DashboardClient({
                   <option value="all">Alle</option>
                   <option value="today">Heute</option>
                   <option value="week">Diese Woche</option>
+                  <option value="overdue">Überfällig</option>
                 </select>
               </label>
+              {(todoSearch ||
+                todoPriorityFilter !== "all" ||
+                todoDueFilter !== "all") && (
+                <button
+                  onClick={() => {
+                    setTodoSearch("");
+                    setTodoPriorityFilter("all");
+                    setTodoDueFilter("all");
+                  }}
+                  className="min-h-11 rounded-xl px-3 text-sm text-nook-muted hover:bg-black/5"
+                >
+                  Zurücksetzen
+                </button>
+              )}
             </section>
+            {(todoSearch ||
+              todoPriorityFilter !== "all" ||
+              todoDueFilter !== "all") && (
+              <div className="mb-5">
+                <NookCard
+                  title="Suchergebnisse"
+                  subtitle={`${filteredTodoTasks.length} ${filteredTodoTasks.length === 1 ? "passende Aufgabe" : "passende Aufgaben"}`}
+                  accent="blue"
+                >
+                  <div className="divide-y divide-black/5">
+                    {filteredTodoTasks.map((task) => (
+                      <TaskRow
+                        key={task.id}
+                        task={task}
+                        area={areas.find((area) => area.id === task.areaId)}
+                        project={projects.find(
+                          (project) => project.id === task.projectId,
+                        )}
+                        onToggle={() => toggleTask(task.id)}
+                        onEdit={() => openTaskEditor(task)}
+                        onDelete={() => deleteTask(task)}
+                        onSaveNotes={(notes) => saveTaskNotes(task, notes)}
+                      />
+                    ))}
+                    {filteredTodoTasks.length === 0 && (
+                      <p className="py-8 text-center text-sm text-nook-muted">
+                        Keine passende Aufgabe gefunden.
+                      </p>
+                    )}
+                  </div>
+                </NookCard>
+              </div>
+            )}
             <div className="grid gap-5">
               {areas.length === 0 && (
                 <NookCard title="Dein erster Bereich">
@@ -1678,7 +1758,7 @@ export function DashboardClient({
               )}
 
               {areas.map((area, areaIndex) => {
-                const directTasks = filteredTodoTasks.filter(
+                const directTasks = orderedTasks.filter(
                   (task) => task.areaId === area.id && !task.projectId,
                 );
                 const areaProjects = projects.filter(
@@ -1805,7 +1885,7 @@ export function DashboardClient({
                     </div>
 
                     {areaProjects.map((project, projectIndex) => {
-                      const projectTasks = filteredTodoTasks.filter(
+                      const projectTasks = orderedTasks.filter(
                         (task) => task.projectId === project.id,
                       );
                       return (
@@ -2284,18 +2364,15 @@ export function DashboardClient({
                             <Trash2 size={16} />
                           </button>
                         </div>
-                        {knowledgePageContent && (
-                          <label className="mt-5 block text-xs text-nook-muted">
-                            Bisheriger Seitentext
-                            <textarea
-                              value={knowledgePageContent}
-                              onChange={(event) =>
-                                setKnowledgePageContent(event.target.value)
-                              }
-                              className="mt-2 min-h-32 w-full resize-y rounded-2xl bg-white/45 px-4 py-3 text-[15px] leading-7 outline-none"
-                            />
-                          </label>
-                        )}
+                        <textarea
+                          value={knowledgePageContent}
+                          onChange={(event) =>
+                            setKnowledgePageContent(event.target.value)
+                          }
+                          className="mt-5 min-h-[300px] w-full resize-y bg-transparent text-[15px] leading-7 outline-none"
+                          placeholder="Schreib einfach los …"
+                          aria-label="Seitentext"
+                        />
                         <div className="mt-4 flex justify-end">
                           <button
                             onClick={saveKnowledgePage}
@@ -2308,13 +2385,12 @@ export function DashboardClient({
                           </button>
                         </div>
 
-                        <div className="my-6 border-t border-black/[0.06]" />
-
-                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <div className="my-5 rounded-[20px] border border-black/[0.06] bg-white/35 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <h3 className="font-medium">Weitere Inhalte</h3>
+                            <h3 className="font-medium">Inhalt einfügen</h3>
                             <p className="mt-1 text-xs text-nook-muted">
-                              Strukturiere nur, was davon profitiert.
+                              Ergänze den Text mit strukturierten Elementen.
                             </p>
                           </div>
                           <div className="flex flex-wrap gap-2">
@@ -2363,6 +2439,7 @@ export function DashboardClient({
                               + Tabelle
                             </button>
                           </div>
+                        </div>
                         </div>
 
                         <div className="space-y-4">
@@ -2903,6 +2980,7 @@ export function DashboardClient({
             <label className="mt-4 block text-sm font-medium">
               Beschreibung
               <textarea
+                ref={editTaskNotesRef}
                 value={knowledgeProjectDescription}
                 onChange={(event) =>
                   setKnowledgeProjectDescription(event.target.value)

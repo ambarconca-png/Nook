@@ -269,7 +269,6 @@ export function KnowledgeProjectBlockCard({
             contentEditable
             suppressContentEditableWarning
             dangerouslySetInnerHTML={{ __html: text.html }}
-            onBlur={() => void save({ html: textEditorRef.current?.innerHTML ?? "" })}
             onPaste={(event) => {
               event.preventDefault();
               document.execCommand(
@@ -282,6 +281,17 @@ export function KnowledgeProjectBlockCard({
             data-placeholder="Schreib einfach los …"
             aria-label="Textinhalt"
           />
+          <div className="mt-3 flex justify-end">
+            <button
+              onClick={() =>
+                void save({ html: textEditorRef.current?.innerHTML ?? "" })
+              }
+              disabled={saving}
+              className="rounded-xl bg-nook-violet px-3 py-2 text-xs text-white disabled:opacity-60"
+            >
+              {saving ? "Speichert …" : "Text speichern"}
+            </button>
+          </div>
         </div>
       )}
 
